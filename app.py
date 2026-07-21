@@ -424,8 +424,8 @@ else:
             * **Cara dapatnya:** Gunakan rumus Excel `=STDEV.S(data_12_bulan)*SQRT(12)`.
 
             **3. Lead Time ($L$) - Waktu Tunggu Pengiriman**
-            * **Apa itu?** Durasi waktu sejak barang dipesan sampai tiba di gudang (dalam satuan TAHUN).
-            * **Cara dapatnya:** Jika supplier butuh waktu 30 hari, maka $L = 30 / 365 = 0.0822$ tahun.
+            * **Apa itu?** Durasi waktu sejak barang dipesan sampai tiba di gudang.
+            * **Cara dapatnya:** Tanyakan ke Supplier jika pesan sekarang berapa hari sampainya.
             """)
 
     with col_b:
@@ -436,7 +436,7 @@ else:
 
             **5. Biaya Simpan ($h$) - Holding Cost**
             * **Apa itu?** Biaya untuk menyimpan 1 unit barang di gudang selama 1 TAHUN.
-            * **Contoh:** Biaya sewa tempat, listrik gudang, perawatan, atau kerusakan per unit.
+            * **Contoh:** Biaya sewa tempat, listrik gudang, perawatan, atau fasilitas lain.
 
             **6. Biaya Kekurangan ($C_u$) - Shortage Cost**
             * **Apa itu?** Kerugian atau estimasi biaya denda/kehilangan profit jika persediaan gudang HABIS saat produksi berjalan.
@@ -444,8 +444,8 @@ else:
 
     st.markdown("---")
     st.success(
-        "💡 **Sudah Dijelaskan Tapi Masih Bingung wkwkwk. Tenang, Udah Disediakan"
-        " Template Kosongan Kok 🥳** Klik tombol **'📥 Unduh Template Excel"
+        "💡 **Sudah Dijelaskan Tapi Masih Bingung, hehehe 😂. Tenang, Udah Disediakan"
+        " Template Kosongan Kok 🥳** Klik tombol **'📥 Unduh Template Excel Di slide samping aja"
         " Otomatis'** di menu sebelah kiri untuk mengunduh template Excel siap"
         " isi!"
     )
