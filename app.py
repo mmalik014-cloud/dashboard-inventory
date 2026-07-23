@@ -848,5 +848,5 @@ else:
 
     st.markdown("---")
     st.success(
-        "💡 Klik tombol **'📥 Unduh Template Excel Otomatis'** di menu sebelah kiri untuk mengunduh template Excel siap isi!"
+        "💡 Bingung mulai dari mana? haha, Saya Sebagai Developer juga sempat linglung menatap Excel kosong cukup lama sebelum sistem ini jadi 😵‍💫. Daripada mengulangi perjuangan yang sama, klik tombol **'📥 Unduh Template Excel Otomatis'** di Panel sebelah kiri dan biarkan template yang kerja keras. Saya sudah capek ngodingnya, Anda tidak perlu capek bikin kolomnya. Cukup Unduh & Isi, lalu kirim dan nikmati hidup tanpa drama 'kolom tidak sesuai format'.😝"
     )
