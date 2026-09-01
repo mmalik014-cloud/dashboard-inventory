@@ -5,3 +5,4 @@ scipy
 plotly
 reportlab
 streamlit-option-menu
+st-supabase-connection
