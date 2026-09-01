@@ -7,6 +7,7 @@ Continuous Review Hadley-Whitin & ABC Analysis Implementation
 import io
 import math
 import os
+import base64
 from datetime import datetime
 import openpyxl
 import pandas as pd
@@ -14,6 +15,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy.stats import norm
 import streamlit as st
+from streamlit_option_menu import option_menu
 
 # ============================================================
 # IMPOR LIBRARY REPORTLAB (PEMBUATAN DOKUMEN PDF)
@@ -27,15 +29,221 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
 
-# ============================================================
-# KONFIGURASI HALAMAN DASHBOARD & TEMA
-# ============================================================
+# ------------------------------------------------------------------------------
+# 1. DATABASE USER & PERUSAHAAN
+# ------------------------------------------------------------------------------
+USERS = {
+    "warehouse1": {"password": "123", "role": "warehouse", "company_id": "PT_A"},
+    "purchasing1": {"password": "123", "role": "purchasing", "company_id": "PT_A"},
+    "owner1": {"password": "123", "role": "owner", "company_id": "PT_A"},
+    "owner_b": {"password": "123", "role": "owner", "company_id": "PT_B"},
+}
+
+# ------------------------------------------------------------------------------
+# 2. KONFIGURASI HALAMAN DASHBOARD & TEMA
+# ------------------------------------------------------------------------------
 st.set_page_config(
     page_title="Smart Inventory Systems",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ------------------------------------------------------------------------------
+# FUNGSI ENCODE GAMBAR LOKAL KE BASE64 (UNTUK BACKGROUND)
+# ------------------------------------------------------------------------------
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# ------------------------------------------------------------------------------
+# 3. SISTEM LOGIN & MULTI-TENANCY (FULLSCREEN AI BACKGROUND LOKAL)
+# ------------------------------------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    # NAMA FILE GAMBAR AI KAMU (Taruh file gambar di folder yang sama dengan app.py)
+    NAMA_FILE_GAMBAR = "background.jpg"
+
+    # Jika file gambar AI ada di folder, pakai sebagai background. Jika belum ada, pakai background gradasi gelap modern.
+    if os.path.exists(NAMA_FILE_GAMBAR):
+        bin_str = get_base64_of_bin_file(NAMA_FILE_GAMBAR)
+        bg_style = f"""
+            background: linear-gradient(rgba(11, 15, 25, 0.65), rgba(11, 15, 25, 0.65)), url("data:image/jpg;base64,{bin_str}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        """
+    else:
+        bg_style = """
+            background-color: #0b0f19;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.5) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
+        """
+
+    st.markdown(
+        f"""
+        <style>
+        header, footer {{ visibility: hidden; }}
+        
+        .stApp {{
+            {bg_style}
+        }}
+
+        /* Card Login Glassmorphism */
+        div[data-testid="stVerticalBlockBorderWrapper"] {{
+            background: rgba(15, 23, 42, 0.85) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 20px !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            padding: 30px !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    col1, col2, col3 = st.columns([1, 1.1, 1])
+
+    with col2:
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="margin-top: 5px; font-weight: 700; color: #F8FAFC; font-size: 26px;">🔒 System Login</h2>
+                    <p style="color: #94A3B8; font-size: 14px; margin-top: -5px;">Masukkan kredensial akun untuk melanjutkan</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            username = st.text_input("Username", key="login_user")
+            password = st.text_input("Password", type="password", key="login_pass")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Masuk Ke Sistem 🚀", use_container_width=True, type="primary"):
+                if username in USERS and USERS[username]["password"] == password:
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = username
+                    st.session_state["role"] = USERS[username]["role"]
+                    st.session_state["company_id"] = USERS[username]["company_id"]
+                    st.rerun()
+                else:
+                    st.error("Username atau Password salah!")
+    st.stop()
+
+st.sidebar.write(f"👤 User: **{st.session_state['username']}** ({st.session_state['role'].upper()})")
+st.sidebar.write(f"🏢 Perusahaan: **{st.session_state['company_id']}**")
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.rerun()
+
+# ------------------------------------------------------------------------------
+# 4. FILTER HAK AKSES MENU (ROLE-BASED ACCESS CONTROL)
+# ------------------------------------------------------------------------------
+role = st.session_state["role"]
+
+if role == "warehouse":
+    allowed_menus = ["Live Monitoring & Chart", "Riwayat Keluar-Masuk"]
+elif role == "purchasing":
+    allowed_menus = ["Live Monitoring & Chart", "Riwayat Keluar-Masuk", "Analisis Sensitivitas", "Draft Surat PO"]
+elif role == "owner":
+    allowed_menus = ["Live Monitoring & Chart", "Riwayat Keluar-Masuk", "Analisis Sensitivitas", "Draft Surat PO", "Pengaturan & Reset Data"]
+
+# ==========================================
+# 5. FUNGSI PEMBUAT TEMPLATE EXCEL (2 SHEET)
+# ==========================================
+def buat_template_excel():
+    output = io.BytesIO()
+    wb = openpyxl.Workbook()
+
+    rupiah_format = '"Rp "#,##0.00'
+    rupiah_format_integer = '"Rp "#,##0'
+
+    ws1 = wb.active
+    ws1.title = "Data Siap Pakai"
+
+    headers1 = ["Jenis Barang", "D", "Sigma", "L", "A", "h", "Cu", "pi", "Satuan"]
+    ws1.append(headers1)
+
+    ws1.append([
+        "='Pengumpulan Data Mentah'!A2",
+        "=SUM('Pengumpulan Data Mentah'!C2:N2)",
+        "=STDEV.S('Pengumpulan Data Mentah'!C2:N2)*SQRT(12)",
+        4,
+        13799,
+        28.33,
+        21000, 
+        22890, 
+        "='Pengumpulan Data Mentah'!B2"
+    ])
+
+    ws1['E2'].number_format = rupiah_format_integer  
+    ws1['F2'].number_format = rupiah_format          
+    ws1['G2'].number_format = rupiah_format_integer  
+    ws1['H2'].number_format = rupiah_format_integer  
+
+    ws1['J4'] = "Keterangan Singkatan Parameter (Sheet 1)"
+    keterangan_sheet1 = [
+        ("D", "Demand atau Permintaan Tahunan (Total pemakaian 1 tahun)"),
+        ("Sigma", "Deviasi Standar Tahunan (Tingkat fluktuasi pemakaian disetahunkan)"),
+        ("L", "Lead Time atau Waktu Tunggu Pengiriman (Dalam Satuan HARI)"),
+        ("A", "Biaya Per Pesan atau Ordering Cost (Rp per kali pesan)"),
+        ("h", "Biaya Simpan atau Holding Cost (Rp per unit per tahun)"),
+        ("Cu", "Biaya Kekurangan atau Shortage Cost (Rp per unit jika backorder)"),
+        ("pi", "Harga Beli Bahan Baku (Rp per unit)"),
+        ("Satuan", "Satuan Ukur Barang (kg, pcs, box, dll)")
+    ]
+    for idx, (param, ket) in enumerate(keterangan_sheet1, start=5):
+        ws1[f'J{idx}'] = param
+        ws1[f'K{idx}'] = ket
+
+    ws2 = wb.create_sheet(title="Pengumpulan Data Mentah")
+
+    headers2 = [
+        "Jenis Barang", "Satuan",
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+        "Total Pemakaian", "Deviasi Bulanan"
+    ]
+    ws2.append(headers2)
+
+    ws2.append([
+        "Aluminium", "kg",
+        650000, 620000, 680000, 640000, 700000, 610000,
+        630000, 660000, 650000, 670000, 690000, 766736,
+        "=SUM(C2:N2)", "=STDEV.S(C2:N2)"
+    ])
+
+    ws2['R1'] = "Keterangan Pengumpulan Data Mentah (Sheet 2)"
+    keterangan_sheet2 = [
+        ("Jan - Des", "Data historis pemakaian riil bulanan pengguna"),
+        ("Total Pemakaian", "Akumulasi permintaan 12 bulan (menjadi D di Sheet 1)"),
+        ("Deviasi Bulanan", "Standar deviasi pemakaian bulanan (disetahunkan di Sheet 1)")
+    ]
+    for idx, (param, ket) in enumerate(keterangan_sheet2, start=2):
+        ws2[f'R{idx}'] = param
+        ws2[f'S{idx}'] = ket
+
+    for ws in [ws1, ws2]:
+        for col in ws.columns:
+            max_len = 0
+            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+            for cell in col:
+                val_str = str(cell.value) if cell.value else ""
+                if not val_str.startswith("="):
+                    max_len = max(max_len, len(val_str))
+            if max_len > 0:
+                ws.column_dimensions[col_letter].width = max(max_len + 5, 12)
+
+    wb.save(output)
+    return output.getvalue()
 
 # Inisialisasi state transaksi & invoice bawaan
 if "pesanan_dikirim" not in st.session_state:
@@ -69,7 +277,6 @@ if not os.path.exists(FOLDER_BUKTI):
 # FUNGSI HELPER & FORMATTING ANGKA
 # ============================================================
 def bersihkan_angka(nilai):
-    """Memastikan angka desimal koma (Indonesia) atau float dibaca dengan benar."""
     if pd.isna(nilai) or nilai is None:
         return 0.0
     if isinstance(nilai, (int, float)):
@@ -87,7 +294,6 @@ def bersihkan_angka(nilai):
         return 0.0
 
 def format_indonesia_satuan(nilai, satuan="pcs"):
-    """Format angka desimal Indonesia dengan satuan dinamis dari Excel."""
     if nilai == "-" or pd.isna(nilai) or nilai is None:
         return "-"
     try:
@@ -105,7 +311,6 @@ def format_rupiah(nilai):
         return str(nilai)
 
 def format_angka_indo(nilai, desimal=2):
-    """Format angka desimal Indonesia tanpa satuan."""
     try:
         val = float(nilai)
         return f"{val:,.{desimal}f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -113,7 +318,6 @@ def format_angka_indo(nilai, desimal=2):
         return str(nilai)
 
 def format_persen_indo(nilai):
-    """Format persentase desimal Indonesia: -5.06 -> -5,06%"""
     try:
         val = float(nilai)
         return f"{val:+.2f}%".replace(".", ",")
@@ -355,64 +559,8 @@ def buat_memo_internal_pdf(df_po, nomor_po, petugas_nama, today_str):
     buffer.seek(0)
     return buffer.getvalue()
 
-def buat_template_excel():
-    output = io.BytesIO()
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "data verifikasi"
-
-    headers = ["Jenis Barang", "D", "Sigma", "L", "A", "h", "Cu", "pi", "Satuan"]
-    ws.append(headers)
-
-    ws.append([
-        "Beras",
-        "=SUM(M14:X14)",
-        "=STDEV.S(M14:X14)*SQRT(12)",
-        4.0,
-        500.0,
-        40.0,
-        3060.0,
-        3000.0,
-        "kg"
-    ])
-    ws.append([])
-
-    keterangan = [
-        ["", "", "", "", "", "", "", "", "", "", "Keterangan", ""],
-        ["", "", "", "", "", "", "", "", "", "", "D", "Demand/Permintaan"],
-        ["", "", "", "", "", "", "", "", "", "", "Sigma", "Deviasi"],
-        ["", "", "", "", "", "", "", "", "", "", "L", "Akar Leadtime"],
-        ["", "", "", "", "", "", "", "", "", "", "A", "Biaya Per pesan"],
-        ["", "", "", "", "", "", "", "", "", "", "h", "Biaya Simpan"],
-        ["", "", "", "", "", "", "", "", "", "", "Cu", "Biaya Backorder/Kekurangan"],
-        ["", "", "", "", "", "", "", "", "", "", "Pi", "Harga Bahan Baku"],
-        ["", "", "", "", "", "", "", "", "", "", "Satuan", "Satuan Ukur Barang (pcs/kg/box/dll)"],
-    ]
-    for row in keterangan:
-        ws.append(row)
-
-    ws.append([])
-    ws.append(["", "", "", "", "", "", "", "", "", "", "", "Kolom Perhitungan sigma "])
-    ws.append(["", "", "", "", "", "", "", "", "", "", "", "Jenis Barang", "Bulan Periode Pengamatan"])
-
-    header_bulan = [
-        "", "", "", "", "", "", "", "", "", "", "", "",
-        "Januari ", "Februari", "Maret", "April", "Mei", "Juni",
-        "Juli", "Agustus", "September", "Oktober", "November", "Desember", "Total "
-    ]
-    ws.append(header_bulan)
-
-    data_bulanan_beras = [
-        "", "", "", "", "", "", "", "", "", "", "", "Beras ",
-        1200, 1150, 1300, 1250, 1400, 1100, 1200, 1250, 1180, 1220, 1300, 1450, "=SUM(M14:X14)"
-    ]
-    ws.append(data_bulanan_beras)
-
-    wb.save(output)
-    return output.getvalue()
-
 # ============================================================
-# INISIALISASI SESSION STATE
+# INISIALISASI SESSION STATE & SIDEBAR
 # ============================================================
 if "data_gudang" not in st.session_state:
     st.session_state["data_gudang"] = None
@@ -421,7 +569,6 @@ if "data_raw_df" not in st.session_state:
 if "stok_realtime" not in st.session_state:
     st.session_state["stok_realtime"] = {}
 
-# Injeksi CSS agar warna tombol popover berubah hijau ketika ada transaksi pengiriman tersimpan
 if st.session_state.pesanan_dikirim:
     st.markdown(
         """
@@ -436,21 +583,28 @@ if st.session_state.pesanan_dikirim:
         unsafe_allow_html=True,
     )
 
-# ============================================================
-# SIDEBAR CONTROL
-# ============================================================
-st.sidebar.header("⚙️ Langkah 1: Upload Master Data")
+with st.sidebar:
+    st.markdown("---")
+    st.subheader("📖 Langkah Awal")
+    st.link_button(
+        label="📘 Buka Modul Tutorial (PDF)",
+        url="https://drive.google.com/file/d/1GgQSKhsgIEGtPMM3uR9qj8V5xl852cvs/view?usp=sharing",
+        use_container_width=True,
+        type="primary",
+    )
 
-excel_template = buat_template_excel()
-st.sidebar.download_button(
-    label="📥 Unduh Template Excel Otomatis",
-    data=excel_template,
-    file_name="Template_Data_Kosongan.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+    st.markdown("---")
+    st.header("⚙️ Upload Master Data")
 
-uploaded_file = st.sidebar.file_uploader("Upload File Template Excel/CSV", type=["csv", "xlsx"])
-max_iter = st.sidebar.slider("Batas Maksimum Iterasi Hadley-Whitin", min_value=10, max_value=100, value=50)
+    st.download_button(
+        label="📥 Unduh Template Excel (2 Sheet)",
+        data=buat_template_excel(),
+        file_name="Template_Input_Hadley_Whitin.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+
+    uploaded_file = st.file_uploader("Upload File Excel", type=["xlsx", "csv"])
 
 # ============================================================
 # PEMPROSESAN DATA & OTOMASI ANALISIS ABC + HADLEY-WHITIN
@@ -460,7 +614,11 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
         if uploaded_file.name.endswith(".csv"):
             df_raw = pd.read_csv(uploaded_file, delimiter=";")
         else:
-            df_raw = pd.read_excel(uploaded_file)
+            xl = pd.ExcelFile(uploaded_file)
+            if "Data Siap Pakai" in xl.sheet_names:
+                df_raw = pd.read_excel(uploaded_file, sheet_name="Data Siap Pakai")
+            else:
+                df_raw = pd.read_excel(uploaded_file, sheet_name=0)
 
         df_raw.columns = df_raw.columns.astype(str).str.strip()
         col_nama = "Jenis Barang" if "Jenis Barang" in df_raw.columns else "Bahan Baku"
@@ -529,7 +687,7 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
             satuan_item = row["Satuan"]
             kategori = row["Kategori"]
 
-            res = hitung_hadley_whitin_single(D, sigma, L, A, h, Cu, pi, max_iter)
+            res = hitung_hadley_whitin_single(D, sigma, L, A, h, Cu, pi, max_iter=50)
 
             metode = "Continuous Review (s,S)" if kategori == "A" else "Continuous Review (s,Q)"
             S_final = round(res["Q_opt"] + res["s_opt"], 2) if kategori == "A" else None
@@ -678,503 +836,551 @@ if st.session_state["data_gudang"] is not None:
     st.markdown("---")
 
     # ============================================================
-    # TAB UTAMA DASHBOARD
+    # TAB UTAMA DASHBOARD (STREAMLIT OPTION MENU)
     # ============================================================
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-       "📊 Live Monitoring & Chart",
-       "📈 Analisis Sensitivitas",
-       "📜 Draft Surat Purchase Order (PO)",
-       "📜 Laporan Riwayat Keluar-Masuk",
-       "⚙️ Pengaturan & Reset Data"
-    ])
+    st.markdown(
+        """
+        <h2 style="text-align: center; font-weight: 700; color: #F8FAFC; margin-bottom: 20px; letter-spacing: 1px;">
+            📌 MODUL UTAMA
+        </h2>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # ------------------ TAB 1 ------------------
-    with tab1:
-        st.markdown("### 📥 📤 Panel Transaksi Gudang")
+    selected = option_menu(
+        menu_title=None,
+        options=[
+            "Live Monitoring & Chart",
+            "Analisis Sensitivitas",
+            "Draft Surat PO",
+            "Riwayat Keluar-Masuk",
+            "Pengaturan & Reset Data",
+        ],
+        icons=["activity", "graph-up-arrow", "file-earmark-text", "box-seam", "gear"],
+        menu_icon="cast",
+        default_index=0,
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "5px!", "background-color": "#1E293B"},
+            "icon": {"color": "#FACC15", "font-size": "18px"},
+            "nav-link": {
+                "font-size": "13px",
+                "text-align": "center",
+                "margin": "2px",
+                "--hover-color": "#334155",
+            },
+            "nav-link-selected": {
+                "background-color": "#FACC15",
+                "color": "#0F172A",
+                "font-weight": "bold",
+            },
+        },
+    )
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            pilih_bahan = st.selectbox("Pilih Jenis Barang:", df_hasil["Bahan Baku"].tolist())
-            satuan_terpilih = df_hasil[df_hasil["Bahan Baku"] == pilih_bahan]["Satuan"].values[0]
-        with c2:
-            jenis_transaksi = st.radio("Aktivitas:", ["Barang Datang (Stok Masuk)", "Diambil Produksi (Stok Keluar)"])
-        with c3:
-            jumlah_mutasi = st.number_input(f"Jumlah ({satuan_terpilih}):", min_value=0.0, step=10.0)
-            submit_button = st.button("Simpan Transaksi 💾")
+    # PROTEKSI HAK AKSES ROLE
+    if selected not in allowed_menus:
+        st.error(f"⛔ **Akses Ditolak!** Akun **{st.session_state['role'].upper()}** tidak diizinkan membuka modul **{selected}**.")
+        st.info(f"💡 Modul yang boleh kamu buka: **{', '.join(allowed_menus)}**")
+    else:
+        # ------------------ MODUL 1 ------------------
+        if selected == "Live Monitoring & Chart":
+            st.markdown("### 📥 📤 Panel Transaksi Gudang")
 
-            if submit_button and jumlah_mutasi > 0:
-                if jenis_transaksi == "Barang Datang (Stok Masuk)":
-                    catat_transaksi(pilih_bahan, jenis_transaksi, jumlah_mutasi, satuan_terpilih)
-                    st.session_state["stok_realtime"][pilih_bahan] += jumlah_mutasi
-                    st.toast(f"Berhasil mencatat stok masuk ({satuan_terpilih})!", icon="📥")
-                else:
-                    catat_transaksi(pilih_bahan, jenis_transaksi, jumlah_mutasi, satuan_terpilih)
-                    st.session_state["stok_realtime"][pilih_bahan] -= jumlah_mutasi
-                    st.toast(f"Berhasil mencatat stok keluar ({satuan_terpilih})!", icon="📤")
-                st.rerun()
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                pilih_bahan = st.selectbox("Pilih Jenis Barang:", df_hasil["Bahan Baku"].tolist())
+                satuan_terpilih = df_hasil[df_hasil["Bahan Baku"] == pilih_bahan]["Satuan"].values[0]
+            with c2:
+                jenis_transaksi = st.radio("Aktivitas:", ["Barang Datang (Stok Masuk)", "Diambil Produksi (Stok Keluar)"])
+            with c3:
+                jumlah_mutasi = st.number_input(f"Jumlah ({satuan_terpilih}):", min_value=0.0, step=10.0)
+                submit_button = st.button("Simpan Transaksi 💾")
 
-        st.markdown("---")
-        st.markdown("#### Hasil Perhitungan & Status Gudang Real-Time 📝")
-        df_tampilan = df_hasil.copy()
+                if submit_button and jumlah_mutasi > 0:
+                    if jenis_transaksi == "Barang Datang (Stok Masuk)":
+                        catat_transaksi(pilih_bahan, jenis_transaksi, jumlah_mutasi, satuan_terpilih)
+                        st.session_state["stok_realtime"][pilih_bahan] += jumlah_mutasi
+                        st.toast(f"Berhasil mencatat stok masuk ({satuan_terpilih})!", icon="📥")
+                    else:
+                        catat_transaksi(pilih_bahan, jenis_transaksi, jumlah_mutasi, satuan_terpilih)
+                        st.session_state["stok_realtime"][pilih_bahan] -= jumlah_mutasi
+                        st.toast(f"Berhasil mencatat stok keluar ({satuan_terpilih})!", icon="📤")
+                    st.rerun()
 
-        def status_gudang_text(r):
-            return "🚨 HARUS REORDER!" if r["Stok Saat Ini"] <= r["s_opt"] else "✅ Stok Aman"
+            st.markdown("---")
+            st.markdown("#### Hasil Perhitungan & Status Gudang Real-Time 📝")
+            df_tampilan = df_hasil.copy()
 
-        df_tampilan["Status Gudang"] = df_tampilan.apply(status_gudang_text, axis=1)
-        df_tampilan["Stok Saat Ini Tampil"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["Stok Saat Ini"], r["Satuan"]), axis=1)
-        df_tampilan["s_opt (Batas Aman/r)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["s_opt"], r["Satuan"]), axis=1)
-        df_tampilan["Q_opt (Pemesanan)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["Q_opt"], r["Satuan"]), axis=1)
-        df_tampilan["S_max (Target Maksimum)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["S_max"], r["Satuan"]) if pd.notna(r["S_max"]) else "-", axis=1)
-        df_tampilan["Safety Stock (SS)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["SS"], r["Satuan"]), axis=1)
-        df_tampilan["Total Cost (OT)"] = df_tampilan["Total Cost (OT)"].apply(format_rupiah)
+            def status_gudang_text(r):
+                return "🚨 HARUS REORDER!" if r["Stok Saat Ini"] <= r["s_opt"] else "✅ Stok Aman"
 
-        kolom_tampil = ["Bahan Baku", "Kategori", "Satuan", "Stok Saat Ini Tampil", "Status Gudang", "s_opt (Batas Aman/r)", "Q_opt (Pemesanan)", "S_max (Target Maksimum)", "Safety Stock (SS)", "Total Cost (OT)"]
-        st.dataframe(df_tampilan[kolom_tampil], use_container_width=True)
+            df_tampilan["Status Gudang"] = df_tampilan.apply(status_gudang_text, axis=1)
+            df_tampilan["Stok Saat Ini Tampil"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["Stok Saat Ini"], r["Satuan"]), axis=1)
+            df_tampilan["s_opt (Batas Aman/r)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["s_opt"], r["Satuan"]), axis=1)
+            df_tampilan["Q_opt (Pemesanan)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["Q_opt"], r["Satuan"]), axis=1)
+            df_tampilan["S_max (Target Maksimum)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["S_max"], r["Satuan"]) if pd.notna(r["S_max"]) else "-", axis=1)
+            df_tampilan["Safety Stock (SS)"] = df_tampilan.apply(lambda r: format_indonesia_satuan(r["SS"], r["Satuan"]), axis=1)
+            df_tampilan["Total Cost (OT)"] = df_tampilan["Total Cost (OT)"].apply(format_rupiah)
 
-        st.markdown("---")
+            kolom_tampil = ["Bahan Baku", "Kategori", "Satuan", "Stok Saat Ini Tampil", "Status Gudang", "s_opt (Batas Aman/r)", "Q_opt (Pemesanan)", "S_max (Target Maksimum)", "Safety Stock (SS)", "Total Cost (OT)"]
+            st.dataframe(df_tampilan[kolom_tampil], use_container_width=True)
 
-        fig = px.bar(
-            df_hasil,
-            x="Bahan Baku",
-            y=["Stok Saat Ini", "s_opt"],
-            barmode="group",
-            title="Komparasi Visual Stok Riil Terhadap Batas Reorder Point (s)",
-            labels={"value": "Volume / Jumlah", "variable": "Parameter Gudang"},
-            color_discrete_sequence=["#3399FF", "#FF3333"],
-        )
-        fig.update_layout(height=500)
-        st.plotly_chart(fig, use_container_width=True)
+            st.markdown("---")
 
-    # ------------------ TAB 2 ------------------
-    with tab2:
-        st.markdown(
-            """
-            <div style="background-color: #1E293B; padding: 16px 20px; border-radius: 8px; border-left: 5px solid #38BDF8; margin-bottom: 20px;">
-                <h3 style="color: #38BDF8; margin: 0; font-size: 20px;">📈 MODUL ANALISIS SENSITIVITAS HADLEY–WHITIN</h3>
-                <p style="color: #94A3B8; margin-top: 4px; font-size: 14px; margin-bottom: 0;">
-                    Simulasi interaktif untuk menguji elastisitas keputusan persediaan (Q*, s*, Safety Stock, dan Total Cost) terhadap perubahan parameter operasional.
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        c_s1, c_s2, c_s3 = st.columns([2, 2, 2])
-        with c_s1:
-            item_sens = st.selectbox("Pilih Bahan Baku yang Diuji:", df_hasil["Bahan Baku"].unique(), key="sb_sens_item")
-        with c_s2:
-            param_sens = st.selectbox(
-                "Pilih Parameter Input yang Diubah:",
-                [
-                    "Permintaan Annual (D)",
-                    "Biaya Pemesanan (A)",
-                    "Biaya Simpan (h)",
-                    "Lead Time (L)",
-                    "Biaya Kekurangan / Backorder (Cu)"
-                ],
-                key="sb_sens_param"
+            fig = px.bar(
+                df_hasil,
+                x="Bahan Baku",
+                y=["Stok Saat Ini", "s_opt"],
+                barmode="group",
+                title="Komparasi Visual Stok Riil Terhadap Batas Reorder Point (s)",
+                labels={"value": "Volume / Jumlah", "variable": "Parameter Gudang"},
+                color_discrete_sequence=["#3399FF", "#FF3333"],
             )
-        with c_s3:
-            rentang_persen = st.slider("Rentang Perubahan (%)", min_value=5, max_value=50, value=25, step=5)
+            fig.update_layout(height=500)
+            st.plotly_chart(fig, use_container_width=True)
 
-        row_base = df_hasil[df_hasil["Bahan Baku"] == item_sens].iloc[0]
+        # ------------------ MODUL 2 ------------------
+        elif selected == "Analisis Sensitivitas":
+            max_iter = 50
+            st.markdown(
+                """
+                <div style="background-color: #1E293B; padding: 16px 20px; border-radius: 8px; border-left: 5px solid #38BDF8; margin-bottom: 20px;">
+                    <h3 style="color: #38BDF8; margin: 0; font-size: 20px;">📈 MODUL ANALISIS SENSITIVITAS HADLEY–WHITIN</h3>
+                    <p style="color: #94A3B8; margin-top: 4px; font-size: 14px; margin-bottom: 0;">
+                        Simulasi interaktif untuk menguji elastisitas keputusan persediaan (Q*, s*, Safety Stock, dan Total Cost) terhadap perubahan parameter operasional.
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        D_base = float(row_base["D_num"])
-        sigma_base = float(row_base["Sigma_num"])
-        L_base = float(row_base["L_num"])
-        A_base = float(row_base["A_num"])
-        h_base = float(row_base["h_num"])
-        Cu_base = float(row_base["Cu_num"])
-        pi_base = float(row_base["pi_num"])
-        satuan_sens = str(row_base["Satuan"])
+            c_s1, c_s2, c_s3 = st.columns([2, 2, 2])
+            with c_s1:
+                item_sens = st.selectbox("Pilih Bahan Baku yang Diuji:", df_hasil["Bahan Baku"].unique(), key="sb_sens_item")
+            with c_s2:
+                param_sens = st.selectbox(
+                    "Pilih Parameter Input yang Diubah:",
+                    [
+                        "Permintaan Annual (D)",
+                        "Biaya Pemesanan (A)",
+                        "Biaya Simpan (h)",
+                        "Lead Time (L)",
+                        "Biaya Kekurangan / Backorder (Cu)"
+                    ],
+                    key="sb_sens_param"
+                )
+            with c_s3:
+                rentang_persen = st.slider("Rentang Perubahan (%)", min_value=5, max_value=50, value=25, step=5)
 
-        res_base = hitung_hadley_whitin_single(D_base, sigma_base, L_base, A_base, h_base, Cu_base, pi_base, max_iter)
+            row_base = df_hasil[df_hasil["Bahan Baku"] == item_sens].iloc[0]
 
-        persentase_list = list(range(-rentang_persen, rentang_persen + 1, 5))
-        tabel_sens_data = []
+            D_base = float(row_base["D_num"])
+            sigma_base = float(row_base["Sigma_num"])
+            L_base = float(row_base["L_num"])
+            A_base = float(row_base["A_num"])
+            h_base = float(row_base["h_num"])
+            Cu_base = float(row_base["Cu_num"])
+            pi_base = float(row_base["pi_num"])
+            satuan_sens = str(row_base["Satuan"])
 
-        for p in persentase_list:
-            faktor = 1.0 + (p / 100.0)
+            res_base = hitung_hadley_whitin_single(D_base, sigma_base, L_base, A_base, h_base, Cu_base, pi_base, max_iter)
 
-            D_var = D_base * faktor if param_sens == "Permintaan Annual (D)" else D_base
-            A_var = A_base * faktor if param_sens == "Biaya Pemesanan (A)" else A_base
-            h_var = h_base * faktor if param_sens == "Biaya Simpan (h)" else h_base
-            L_var = L_base * faktor if param_sens == "Lead Time (L)" else L_base
-            Cu_var = Cu_base * faktor if param_sens == "Biaya Kekurangan / Backorder (Cu)" else Cu_base
+            persentase_list = list(range(-rentang_persen, rentang_persen + 1, 5))
+            tabel_sens_data = []
 
-            res_var = hitung_hadley_whitin_single(D_var, sigma_base, L_var, A_var, h_var, Cu_var, pi_base, max_iter)
+            for p in persentase_list:
+                faktor = 1.0 + (p / 100.0)
 
-            pct_ot = ((res_var["Total_Cost"] - res_base["Total_Cost"]) / res_base["Total_Cost"] * 100) if res_base["Total_Cost"] > 0 else 0
-            pct_q = ((res_var["Q_opt"] - res_base["Q_opt"]) / res_base["Q_opt"] * 100) if res_base["Q_opt"] > 0 else 0
-            pct_s = ((res_var["s_opt"] - res_base["s_opt"]) / res_base["s_opt"] * 100) if res_base["s_opt"] > 0 else 0
+                D_var = D_base * faktor if param_sens == "Permintaan Annual (D)" else D_base
+                A_var = A_base * faktor if param_sens == "Biaya Pemesanan (A)" else A_base
+                h_var = h_base * faktor if param_sens == "Biaya Simpan (h)" else h_base
+                L_var = L_base * faktor if param_sens == "Lead Time (L)" else L_base
+                Cu_var = Cu_base * faktor if param_sens == "Biaya Kekurangan / Backorder (Cu)" else Cu_base
 
-            if param_sens == "Permintaan Annual (D)":
-                val_param = D_var
-            elif param_sens == "Biaya Pemesanan (A)":
-                val_param = A_var
-            elif param_sens == "Biaya Simpan (h)":
-                val_param = h_var
-            elif param_sens == "Lead Time (L)":
-                val_param = L_var * 365.0
+                res_var = hitung_hadley_whitin_single(D_var, sigma_base, L_var, A_var, h_var, Cu_var, pi_base, max_iter=50)
+
+                pct_ot = ((res_var["Total_Cost"] - res_base["Total_Cost"]) / res_base["Total_Cost"] * 100) if res_base["Total_Cost"] > 0 else 0
+                pct_q = ((res_var["Q_opt"] - res_base["Q_opt"]) / res_base["Q_opt"] * 100) if res_base["Q_opt"] > 0 else 0
+                pct_s = ((res_var["s_opt"] - res_base["s_opt"]) / res_base["s_opt"] * 100) if res_base["s_opt"] > 0 else 0
+
+                if param_sens == "Permintaan Annual (D)":
+                    val_param = D_var
+                elif param_sens == "Biaya Pemesanan (A)":
+                    val_param = A_var
+                elif param_sens == "Biaya Simpan (h)":
+                    val_param = h_var
+                elif param_sens == "Lead Time (L)":
+                    val_param = L_var * 365.0
+                else:
+                    val_param = Cu_var
+
+                tabel_sens_data.append({
+                    "Perubahan (%)": f"{p:+d}%",
+                    "Nilai Parameter": format_angka_indo(val_param),
+                    "Q* (Pemesanan)": format_angka_indo(res_var["Q_opt"]),
+                    "Δ Q* (%)": format_persen_indo(pct_q),
+                    "s* (ROP)": format_angka_indo(res_var["s_opt"]),
+                    "Δ s* (%)": format_persen_indo(pct_s),
+                    "Safety Stock (SS)": format_angka_indo(res_var["SS"]),
+                    "Total Cost / OT (Rp)": format_angka_indo(res_var["Total_Cost"]),
+                    "Δ Total Cost (%)": format_persen_indo(pct_ot),
+                    "p_raw": p,
+                    "OT_raw": res_var["Total_Cost"],
+                    "Q_raw": res_var["Q_opt"],
+                    "s_raw": res_var["s_opt"]
+                })
+
+            df_sens_table = pd.DataFrame(tabel_sens_data)
+
+            st.markdown(f"#### 📌 Data Dasar (Baseline) untuk **{item_sens}**")
+            m_b1, m_b2, m_b3, m_b4 = st.columns(4)
+            m_b1.metric("Q* Baseline", format_indonesia_satuan(res_base["Q_opt"], satuan_sens))
+            m_b2.metric("s* (ROP) Baseline", format_indonesia_satuan(res_base["s_opt"], satuan_sens))
+            m_b3.metric("Safety Stock Baseline", format_indonesia_satuan(res_base["SS"], satuan_sens))
+            m_b4.metric("Total Cost (OT) Baseline", format_rupiah(res_base["Total_Cost"]))
+
+            st.markdown("---")
+
+            fig_sens = go.Figure()
+            fig_sens.add_trace(go.Scatter(
+                x=df_sens_table["p_raw"],
+                y=df_sens_table["OT_raw"],
+                mode='lines+markers',
+                name='Total Cost / OT (Rp)',
+                line=dict(color='#E53935', width=3)
+            ))
+
+            fig_sens.add_trace(go.Scatter(
+                x=df_sens_table["p_raw"],
+                y=df_sens_table["Q_raw"],
+                mode='lines+markers',
+                name=f'Q* ({satuan_sens})',
+                yaxis='y2',
+                line=dict(color='#1E88E5', width=2, dash='dash')
+            ))
+
+            fig_sens.add_trace(go.Scatter(
+                x=df_sens_table["p_raw"],
+                y=df_sens_table["s_raw"],
+                mode='lines+markers',
+                name=f's* ROP ({satuan_sens})',
+                yaxis='y2',
+                line=dict(color='#43A047', width=2, dash='dot')
+            ))
+
+            fig_sens.update_layout(
+                title=f"Kurva Sensitivitas {param_sens} Terhadap OT, Q*, dan s* ({item_sens})",
+                xaxis=dict(title="Perubahan Parameter Input (%)"),
+                yaxis=dict(
+                    title=dict(text="Total Cost / OT (Rp)", font=dict(color='#E53935')),
+                    tickfont=dict(color='#E53935')
+                ),
+                yaxis2=dict(
+                    title=dict(text=f"Jumlah Unit ({satuan_sens})", font=dict(color='#1E88E5')),
+                    tickfont=dict(color='#1E88E5'),
+                    overlaying='y',
+                    side='right'
+                ),
+                hovermode="x unified",
+                legend=dict(x=0.01, y=0.99)
+            )
+
+            st.plotly_chart(fig_sens, use_container_width=True)
+            st.markdown("#### 📋 Tabel Rincian Hasil Analisis Sensitivitas")
+            kolom_tabel_tampil = ["Perubahan (%)", "Nilai Parameter", "Q* (Pemesanan)", "Δ Q* (%)", "s* (ROP)", "Δ s* (%)", "Safety Stock (SS)", "Total Cost / OT (Rp)", "Δ Total Cost (%)"]
+            st.dataframe(df_sens_table[kolom_tabel_tampil], use_container_width=True)
+
+        # ------------------ MODUL 3 ------------------
+        elif selected == "Draft Surat PO":
+            st.markdown("<h2 style='font-size: 28px; font-weight: bold;'>📜 Generator Dokumen Purchase Order (PO)</h2>", unsafe_allow_html=True)
+
+            if not PDF_AVAILABLE:
+                st.error("⚠️ Library 'reportlab' belum terinstall. Silakan jalankan `pip install reportlab` di terminal Anda.")
             else:
-                val_param = Cu_var
+                if df_kritis_po:
+                    df_po = pd.DataFrame(df_kritis_po)
+                    today_str = datetime.now().strftime("%d %B %Y")
+                    nomor_po = f"PO/INV/{datetime.now().strftime('%Y%m%d')}/001"
+                    petugas_nama = "Admin Logistics"
+                    catatan_po = "Mohon dikirimkan maksimal 3 hari kerja setelah surat PO ini diterbitkan."
 
-            tabel_sens_data.append({
-                "Perubahan (%)": f"{p:+d}%",
-                "Nilai Parameter": format_angka_indo(val_param),
-                "Q* (Pemesanan)": format_angka_indo(res_var["Q_opt"]),
-                "Δ Q* (%)": format_persen_indo(pct_q),
-                "s* (ROP)": format_angka_indo(res_var["s_opt"]),
-                "Δ s* (%)": format_persen_indo(pct_s),
-                "Safety Stock (SS)": format_angka_indo(res_var["SS"]),
-                "Total Cost / OT (Rp)": format_angka_indo(res_var["Total_Cost"]),
-                "Δ Total Cost (%)": format_persen_indo(pct_ot),
-                "p_raw": p,
-                "OT_raw": res_var["Total_Cost"],
-                "Q_raw": res_var["Q_opt"],
-                "s_raw": res_var["s_opt"]
-            })
+                    sub_po_tab1, sub_po_tab2 = st.tabs(["📄 1. Surat PO Resmi untuk Supplier (PDF)", "🔒 2. Draft Catatan Internal Perusahaan (PDF)"])
 
-        df_sens_table = pd.DataFrame(tabel_sens_data)
+                    with sub_po_tab1:
+                        st.info("🔒 Setiap bahan baku diterbitkan dalam Surat PO PDF terpisah secara vertikal.")
 
-        st.markdown(f"#### 📌 Data Dasar (Baseline) untuk **{item_sens}**")
-        m_b1, m_b2, m_b3, m_b4 = st.columns(4)
-        m_b1.metric("Q* Baseline", format_indonesia_satuan(res_base["Q_opt"], satuan_sens))
-        m_b2.metric("s* (ROP) Baseline", format_indonesia_satuan(res_base["s_opt"], satuan_sens))
-        m_b3.metric("Safety Stock Baseline", format_indonesia_satuan(res_base["SS"], satuan_sens))
-        m_b4.metric("Total Cost (OT) Baseline", format_rupiah(res_base["Total_Cost"]))
+                        for i, bahan in enumerate(df_po["Nama Bahan Baku"].unique()):
+                            row = df_po[df_po["Nama Bahan Baku"] == bahan].iloc[0]
+                            no_po = f"PO/{bahan[:3].upper()}/{datetime.now().strftime('%Y%m%d')}/{i+1:02d}"
 
-        st.markdown("---")
-
-        fig_sens = go.Figure()
-        fig_sens.add_trace(go.Scatter(
-            x=df_sens_table["p_raw"],
-            y=df_sens_table["OT_raw"],
-            mode='lines+markers',
-            name='Total Cost / OT (Rp)',
-            line=dict(color='#E53935', width=3)
-        ))
-
-        fig_sens.add_trace(go.Scatter(
-            x=df_sens_table["p_raw"],
-            y=df_sens_table["Q_raw"],
-            mode='lines+markers',
-            name=f'Q* ({satuan_sens})',
-            yaxis='y2',
-            line=dict(color='#1E88E5', width=2, dash='dash')
-        ))
-
-        fig_sens.add_trace(go.Scatter(
-            x=df_sens_table["p_raw"],
-            y=df_sens_table["s_raw"],
-            mode='lines+markers',
-            name=f's* ROP ({satuan_sens})',
-            yaxis='y2',
-            line=dict(color='#43A047', width=2, dash='dot')
-        ))
-
-        fig_sens.update_layout(
-            title=f"Kurva Sensitivitas {param_sens} Terhadap OT, Q*, dan s* ({item_sens})",
-            xaxis=dict(title="Perubahan Parameter Input (%)"),
-            yaxis=dict(
-                title=dict(text="Total Cost / OT (Rp)", font=dict(color='#E53935')),
-                tickfont=dict(color='#E53935')
-            ),
-            yaxis2=dict(
-                title=dict(text=f"Jumlah Unit ({satuan_sens})", font=dict(color='#1E88E5')),
-                tickfont=dict(color='#1E88E5'),
-                overlaying='y',
-                side='right'
-            ),
-            hovermode="x unified",
-            legend=dict(x=0.01, y=0.99)
-        )
-
-        st.plotly_chart(fig_sens, use_container_width=True)
-        st.markdown("#### 📋 Tabel Rincian Hasil Analisis Sensitivitas")
-        kolom_tabel_tampil = ["Perubahan (%)", "Nilai Parameter", "Q* (Pemesanan)", "Δ Q* (%)", "s* (ROP)", "Δ s* (%)", "Safety Stock (SS)", "Total Cost / OT (Rp)", "Δ Total Cost (%)"]
-        st.dataframe(df_sens_table[kolom_tabel_tampil], use_container_width=True)
-
-    # ------------------ TAB 3 ------------------
-    with tab3:
-        st.markdown("<h2 style='font-size: 28px; font-weight: bold;'>📜 Generator Dokumen Purchase Order (PO)</h2>", unsafe_allow_html=True)
-
-        if not PDF_AVAILABLE:
-            st.error("⚠️ Library 'reportlab' belum terinstall. Silakan jalankan `pip install reportlab` di terminal Anda.")
-        else:
-            if df_kritis_po:
-                df_po = pd.DataFrame(df_kritis_po)
-                today_str = datetime.now().strftime("%d %B %Y")
-                nomor_po = f"PO/INV/{datetime.now().strftime('%Y%m%d')}/001"
-                petugas_nama = "Admin Logistics"
-                catatan_po = "Mohon dikirimkan maksimal 3 hari kerja setelah surat PO ini diterbitkan."
-
-                sub_po_tab1, sub_po_tab2 = st.tabs(["📄 1. Surat PO Resmi untuk Supplier (PDF)", "🔒 2. Draft Catatan Internal Perusahaan (PDF)"])
-
-                with sub_po_tab1:
-                    st.info("🔒 Setiap bahan baku diterbitkan dalam Surat PO PDF terpisah secara vertikal.")
-
-                    for i, bahan in enumerate(df_po["Nama Bahan Baku"].unique()):
-                        row = df_po[df_po["Nama Bahan Baku"] == bahan].iloc[0]
-                        no_po = f"PO/{bahan[:3].upper()}/{datetime.now().strftime('%Y%m%d')}/{i+1:02d}"
-
-                        nama_supplier_item = st.text_input(
-                            f"✏️ Edit Nama Supplier (Kepada Yth:) - Item {bahan}:",
-                            value=f"PT. Supplier {bahan} Utama",
-                            key=f"input_supplier_{i}"
-                        )
-
-                        df_item = pd.DataFrame([{
-                            "No": 1,
-                            "Nama Bahan Baku": bahan,
-                            "Jumlah Pesanan": format_indonesia_satuan(row["Rekomendasi Pesan"], row["Satuan"])
-                        }])
-
-                        with st.container(border=True):
-                            st.markdown(f"<h3 style='text-align:center;'>SURAT PEMESANAN BARANG (PURCHASE ORDER)</h3><p style='text-align:center;'>Item: <b>{bahan}</b> (Kategori {row['Kategori']})</p><hr>", unsafe_allow_html=True)
-
-                            c1, c2 = st.columns(2)
-                            c1.write(f"**Kepada Yth:** {nama_supplier_item}\n\n**Tanggal:** {today_str}")
-                            c2.write(f"**No. PO:** `{no_po}`\n\n**Diterbitkan Oleh:** {petugas_nama}")
-
-                            st.dataframe(df_item, use_container_width=True, hide_index=True)
-                            st.caption(f"📌 *Catatan:* {catatan_po}")
-
-                            st.write("<br>", unsafe_allow_html=True)
-                            t1, t2 = st.columns(2)
-                            t1.write(f"Hormat Kami,\n\n\n**( {petugas_nama} )**")
-                            t2.write("Disetujui Oleh,\n\n\n**( .................... )**")
-
-                        bytes_pdf_po = buat_surat_po_pdf(
-                            bahan=bahan,
-                            kategori=row["Kategori"],
-                            satuan=row["Satuan"],
-                            qty_pesan=row["Rekomendasi Pesan"],
-                            vendor_nama=nama_supplier_item,
-                            no_po=no_po,
-                            petugas_nama=petugas_nama,
-                            tanggal_str=today_str,
-                            catatan=catatan_po
-                        )
-
-                        df_tr_now = muat_transit()
-                        is_ordered = not df_tr_now.empty and (df_tr_now["Bahan Baku"] == bahan).any()
-
-                        col_btn1, col_btn2 = st.columns(2)
-                        with col_btn1:
-                            st.download_button(
-                                f"📄 Download Surat PO ({bahan}) [.pdf]",
-                                data=bytes_pdf_po,
-                                file_name=f"Surat_PO_{bahan}.pdf",
-                                mime="application/pdf",
-                                type="primary",
-                                key=f"dl_pdf_{i}",
-                                use_container_width=True
+                            nama_supplier_item = st.text_input(
+                                f"✏️ Edit Nama Supplier (Kepada Yth:) - Item {bahan}:",
+                                value=f"PT. Supplier {bahan} Utama",
+                                key=f"input_supplier_{i}"
                             )
 
-                        with col_btn2:
-                            # Label dinamis & status visual
-                            if is_ordered:
-                                pop_label = f"✅ Informasi Status Pengiriman ({bahan})"
-                            else:
-                                pop_label = f"📦 Informasi Status Pengiriman ({bahan})"
+                            df_item = pd.DataFrame([{
+                                "No": 1,
+                                "Nama Bahan Baku": bahan,
+                                "Jumlah Pesanan": format_indonesia_satuan(row["Rekomendasi Pesan"], row["Satuan"])
+                            }])
 
-                            with st.popover(pop_label, use_container_width=True):
-                                st.markdown(f"**Informasi Status Pengiriman ({bahan})**")
-                                st.info(f"**Jumlah Pesanan ({row['Satuan']}):** {format_indonesia_satuan(row['Rekomendasi Pesan'], row['Satuan'])}")
+                            with st.container(border=True):
+                                st.markdown(f"<h3 style='text-align:center;'>SURAT PEMESANAN BARANG (PURCHASE ORDER)</h3><p style='text-align:center;'>Item: <b>{bahan}</b> (Kategori {row['Kategori']})</p><hr>", unsafe_allow_html=True)
 
-                                if not is_ordered:
-                                    st.warning("⚠️ Status Pesanan belum tercatat. Unggah foto invoice untuk memperbarui status pengiriman.")
-                                    file_bukti_jpg = st.file_uploader(
-                                        "Pilih file invoice pengiriman",
-                                        type=["jpg", "jpeg", "png"],
-                                        key=f"uploader_invoice_{i}"
-                                    )
+                                c1, c2 = st.columns(2)
+                                c1.write(f"**Kepada Yth:** {nama_supplier_item}\n\n**Tanggal:** {today_str}")
+                                c2.write(f"**No. PO:** `{no_po}`\n\n**Diterbitkan Oleh:** {petugas_nama}")
 
-                                    if st.button("Simpan & Kirim 💾", key=f"btn_simpan_invoice_{i}", use_container_width=True):
-                                        if file_bukti_jpg is not None:
-                                            st.session_state.invoice_data = file_bukti_jpg.read()
-                                            
-                                            # Baru dicatat ke Tab 4 HANYA saat file invoice diunggah & tombol simpan diklik
-                                            catat_transit(
-                                                bahan=bahan,
-                                                jumlah=float(row["Rekomendasi Pesan"]),
-                                                satuan=row["Satuan"],
-                                                supplier=nama_supplier_item,
-                                                file_upload=file_bukti_jpg
-                                            )
-                                            st.toast(f"Invoice {bahan} berhasil disimpan! Data resmi masuk ke Menu Laporan Keluar Masuk.", icon="✅")
-                                            st.rerun() # Otomatis merefresh halaman & menutup popover!
-                                        else:
-                                            st.error("❌ Silakan unggah foto invoice (.jpg/.jpeg/.png) terlebih dahulu sebelum menyimpan!")
+                                st.dataframe(df_item, use_container_width=True, hide_index=True)
+                                st.caption(f"📌 *Catatan:* {catatan_po}")
+
+                                st.write("<br>", unsafe_allow_html=True)
+                                t1, t2 = st.columns(2)
+                                t1.write(f"Hormat Kami,\n\n\n**( {petugas_nama} )**")
+                                t2.write("Disetujui Oleh,\n\n\n**( .................... )**")
+
+                            bytes_pdf_po = buat_surat_po_pdf(
+                                bahan=bahan,
+                                kategori=row["Kategori"],
+                                satuan=row["Satuan"],
+                                qty_pesan=row["Rekomendasi Pesan"],
+                                vendor_nama=nama_supplier_item,
+                                no_po=no_po,
+                                petugas_nama=petugas_nama,
+                                tanggal_str=today_str,
+                                catatan=catatan_po
+                            )
+
+                            df_tr_now = muat_transit()
+                            is_ordered = not df_tr_now.empty and (df_tr_now["Bahan Baku"] == bahan).any()
+
+                            col_btn1, col_btn2 = st.columns(2)
+                            with col_btn1:
+                                st.download_button(
+                                    f"📄 Download Surat PO ({bahan}) [.pdf]",
+                                    data=bytes_pdf_po,
+                                    file_name=f"Surat_PO_{bahan}.pdf",
+                                    mime="application/pdf",
+                                    type="primary",
+                                    key=f"dl_pdf_{i}",
+                                    use_container_width=True
+                                )
+
+                            with col_btn2:
+                                if is_ordered:
+                                    pop_label = f"✅ Informasi Status Pengiriman ({bahan})"
                                 else:
-                                    st.success("✅ Pesanan saat ini telah resmi berstatus **Dalam Proses Kirim** dan tercatat di Tab 4.")
-                                    st.markdown("---")
-                                    st.markdown("**✏️ Edit / Ganti Foto Invoice:**")
-                                    file_edit_jpg = st.file_uploader(
-                                        f"Pilih foto invoice baru untuk {bahan}",
-                                        type=["jpg", "jpeg", "png"],
-                                        key=f"upload_edit_jpg_{i}"
-                                    )
+                                    pop_label = f"📦 Informasi Status Pengiriman ({bahan})"
 
-                                    if st.button("Simpan Perubahan Gambar 🖼️", key=f"btn_update_img_{i}", use_container_width=True):
-                                        if file_edit_jpg is None:
-                                            st.warning("⚠️ Pilih berkas foto baru terlebih dahulu!")
-                                        else:
-                                            if edit_gambar_transit(bahan, file_edit_jpg):
-                                                st.session_state.invoice_data = file_edit_jpg.read()
-                                                st.toast(f"Gambar invoice untuk {bahan} berhasil diperbarui!", icon="🖼️")
-                                                st.rerun() # Otomatis merefresh halaman & menutup popover!
+                                with st.popover(pop_label, use_container_width=True):
+                                    st.markdown(f"**Informasi Status Pengiriman ({bahan})**")
+                                    st.info(f"**Jumlah Pesanan ({row['Satuan']}):** {format_indonesia_satuan(row['Rekomendasi Pesan'], row['Satuan'])}")
 
-                        st.markdown("<hr style='border:1px dashed #555;'><br>", unsafe_allow_html=True)
+                                    if not is_ordered:
+                                        st.warning("⚠️ Status Pesanan belum tercatat. Unggah foto invoice untuk memperbarui status pengiriman.")
+                                        file_bukti_jpg = st.file_uploader(
+                                            "Pilih file invoice pengiriman",
+                                            type=["jpg", "jpeg", "png"],
+                                            key=f"uploader_invoice_{i}"
+                                        )
 
-                with sub_po_tab2:
-                    st.warning("⚠️ **Dokumen Rahasia Internal:** Memuat analisis defisit persediaan, ROP, Kategori ABC, dan Estimasi Anggaran Biaya untuk pengawasan internal perusahaan.")
+                                        if st.button("Simpan & Kirim 💾", key=f"btn_simpan_invoice_{i}", use_container_width=True):
+                                            if file_bukti_jpg is not None:
+                                                st.session_state.invoice_data = file_bukti_jpg.read()
 
-                    with st.container(border=True):
-                        st.markdown("""
-                        <div style="text-align: center; border-bottom: 2px solid #555; padding-bottom: 10px; margin-bottom: 20px;">
-                            <h2 style="margin:0; color: #FF4B4B;">DRAFT MEMO INTERNAL - ANALISIS & ANGGARAN PO</h2>
-                            <p style="margin:0; color: #888;">Dokumen Lampiran Internal / Approval Procurement</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                                                catat_transit(
+                                                    bahan=bahan,
+                                                    jumlah=float(row["Rekomendasi Pesan"]),
+                                                    satuan=row["Satuan"],
+                                                    supplier=nama_supplier_item,
+                                                    file_upload=file_bukti_jpg
+                                                )
+                                                st.toast(f"Invoice {bahan} berhasil disimpan! Data resmi masuk ke Menu Laporan Keluar Masuk.", icon="✅")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Silakan unggah foto invoice (.jpg/.jpeg/.png) terlebih dahulu sebelum menyimpan!")
+                                    else:
+                                        st.success("✅ Pesanan saat ini telah resmi berstatus **Dalam Proses Kirim** dan tercatat di Menu Riwayat.")
+                                        st.markdown("---")
+                                        st.markdown("**✏️ Edit / Ganti Foto Invoice:**")
+                                        file_edit_jpg = st.file_uploader(
+                                            f"Pilih foto invoice baru untuk {bahan}",
+                                            type=["jpg", "jpeg", "png"],
+                                            key=f"upload_edit_jpg_{i}"
+                                        )
 
-                        col_h1, col_h2 = st.columns(2)
-                        with col_h1:
-                            st.write(f"**Target Supplier:** Multiple Suppliers (Per Kategori)")
-                            st.write(f"**Tanggal Analisis:** {today_str}")
-                        with col_h2:
-                            st.write(f"**Ref No. PO:** `{nomor_po}`")
-                            st.write(f"**Analis Logistics:** {petugas_nama}")
+                                        if st.button("Simpan Perubahan Gambar 🖼️", key=f"btn_update_img_{i}", use_container_width=True):
+                                            if file_edit_jpg is None:
+                                                st.warning("⚠️ Pilih berkas foto baru terlebih dahulu!")
+                                            else:
+                                                if edit_gambar_transit(bahan, file_edit_jpg):
+                                                    st.session_state.invoice_data = file_edit_jpg.read()
+                                                    st.toast(f"Gambar invoice untuk {bahan} berhasil diperbarui!", icon="🖼️")
+                                                    st.rerun()
 
-                        st.markdown("#### **Rincian Parameter Persediaan & Estimasi Anggaran:**")
+                            st.markdown("<hr style='border:1px dashed #555;'><br>", unsafe_allow_html=True)
 
-                        df_po_show = df_po.copy()
-                        df_po_show["Stok Aktual Tampil"] = df_po_show.apply(lambda r: format_indonesia_satuan(r["Stok Aktual"], r["Satuan"]), axis=1)
-                        df_po_show["Batas ROP Tampil"] = df_po_show.apply(lambda r: format_indonesia_satuan(r["Batas ROP"], r["Satuan"]), axis=1)
-                        df_po_show["Rekomendasi Pesan Tampil"] = df_po_show.apply(lambda r: format_indonesia_satuan(r["Rekomendasi Pesan"], r["Satuan"]), axis=1)
-                        df_po_show["Estimasi Biaya"] = df_po_show["Estimasi Biaya (Rp)"].apply(format_rupiah)
+                    with sub_po_tab2:
+                        st.warning("⚠️ **Dokumen Rahasia Internal:** Memuat analisis defisit persediaan, ROP, Kategori ABC, dan Estimasi Anggaran Biaya untuk pengawasan internal perusahaan.")
 
-                        st.dataframe(
-                            df_po_show[["Nama Bahan Baku", "Kategori", "Satuan", "Stok Aktual Tampil", "Batas ROP Tampil", "Rekomendasi Pesan Tampil", "Estimasi Biaya"]],
-                            use_container_width=True,
-                            hide_index=True
+                        with st.container(border=True):
+                            st.markdown("""
+                            <div style="text-align: center; border-bottom: 2px solid #555; padding-bottom: 10px; margin-bottom: 20px;">
+                                <h2 style="margin:0; color: #FF4B4B;">DRAFT MEMO INTERNAL - ANALISIS & ANGGARAN PO</h2>
+                                <p style="margin:0; color: #888;">Dokumen Lampiran Internal / Approval Procurement</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            col_h1, col_h2 = st.columns(2)
+                            with col_h1:
+                                st.write(f"**Target Supplier:** Multiple Suppliers (Per Kategori)")
+                                st.write(f"**Tanggal Analisis:** {today_str}")
+                            with col_h2:
+                                st.write(f"**Ref No. PO:** `{nomor_po}`")
+                                st.write(f"**Analis Logistics:** {petugas_nama}")
+
+                            st.markdown("#### **Rincian Parameter Persediaan & Estimasi Anggaran:**")
+
+                            df_po_show = df_po.copy()
+                            df_po_show["Stok Aktual Tampil"] = df_po_show.apply(lambda r: format_indonesia_satuan(r["Stok Aktual"], r["Satuan"]), axis=1)
+                            df_po_show["Batas ROP Tampil"] = df_po_show.apply(lambda r: format_indonesia_satuan(r["Batas ROP"], r["Satuan"]), axis=1)
+                            df_po_show["Rekomendasi Pesan Tampil"] = df_po_show.apply(lambda r: format_indonesia_satuan(r["Rekomendasi Pesan"], r["Satuan"]), axis=1)
+                            df_po_show["Estimasi Biaya"] = df_po_show["Estimasi Biaya (Rp)"].apply(format_rupiah)
+
+                            st.dataframe(
+                                df_po_show[["Nama Bahan Baku", "Kategori", "Satuan", "Stok Aktual Tampil", "Batas ROP Tampil", "Rekomendasi Pesan Tampil", "Estimasi Biaya"]],
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                            total_est_biaya = df_po["Estimasi Biaya (Rp)"].sum()
+                            st.markdown(f"### **Total Pengajuan Anggaran: {format_rupiah(total_est_biaya)}**")
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            col_ttd1, col_ttd2 = st.columns(2)
+                            with col_ttd1:
+                                st.write("Disiapkan Oleh (Gudang/Logistik),")
+                                st.markdown("<br><br>", unsafe_allow_html=True)
+                                st.write(f"**( {petugas_nama} )**")
+                            with col_ttd2:
+                                st.write("Persetujuan Anggaran (Finance/Manager),")
+                                st.markdown("<br><br>", unsafe_allow_html=True)
+                                st.write("**( .................................... )**")
+
+                        bytes_pdf_internal = buat_memo_internal_pdf(
+                            df_po=df_po,
+                            nomor_po=nomor_po,
+                            petugas_nama=petugas_nama,
+                            today_str=today_str
                         )
 
-                        total_est_biaya = df_po["Estimasi Biaya (Rp)"].sum()
-                        st.markdown(f"### **Total Pengajuan Anggaran: {format_rupiah(total_est_biaya)}**")
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        col_ttd1, col_ttd2 = st.columns(2)
-                        with col_ttd1:
-                            st.write("Disiapkan Oleh (Gudang/Logistik),")
-                            st.markdown("<br><br>", unsafe_allow_html=True)
-                            st.write(f"**( {petugas_nama} )**")
-                        with col_ttd2:
-                            st.write("Persetujuan Anggaran (Finance/Manager),")
-                            st.markdown("<br><br>", unsafe_allow_html=True)
-                            st.write("**( .................................... )**")
-
-                    bytes_pdf_internal = buat_memo_internal_pdf(
-                        df_po=df_po,
-                        nomor_po=nomor_po,
-                        petugas_nama=petugas_nama,
-                        today_str=today_str
-                    )
-
-                    st.download_button(
-                        label="📄 Download Draft Catatan Internal [.pdf]",
-                        data=bytes_pdf_internal,
-                        file_name=f"Draft_Internal_PO_{nomor_po.replace('/', '_')}.pdf",
-                        mime="application/pdf",
-                        key="btn_dl_pdf_int_total"
-                    )
-            else:
-                st.success("✅ Tidak ada bahan baku yang berada di bawah Reorder Point (ROP). Belum ada draft PO yang perlu diterbitkan.")
-
-    # ------------------ TAB 4 ------------------
-    with tab4:
-        st.markdown("#### 📜 Riwayat Transaksi Mutasi Stok Gudang")
-        df_riwayat = muat_riwayat()
-        if not df_riwayat.empty:
-            df_riwayat_display = df_riwayat.sort_values(by="Waktu", ascending=False).copy()
-            st.dataframe(df_riwayat_display, use_container_width=True)
-
-            buffer_rw = io.BytesIO()
-            with pd.ExcelWriter(buffer_rw, engine='openpyxl') as writer:
-                df_riwayat_display.to_excel(writer, index=False, sheet_name='Riwayat Mutasi')
-
-            st.download_button(
-                label="📥 Download Laporan Riwayat (Excel)",
-                data=buffer_rw.getvalue(),
-                file_name="Laporan_Riwayat_Mutasi_Stok.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.info("Belum ada riwayat transaksi mutasi yang tercatat.")
-
-        st.markdown("---")
-
-        st.markdown("#### 🚚 Status Pesanan Dalam Proses Pengantaran (Supplier)")
-        df_transit = muat_transit()
-
-        if not df_transit.empty:
-            for idx, r_tr in df_transit.iterrows():
-                with st.container(border=True):
-                    c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([2, 2.5, 2, 2, 2, 1.5])
-                    c_t1.write(f"**Waktu:**\n{pd.to_datetime(r_tr['Waktu']).strftime('%Y-%m-%d %H:%M:%S')}")
-                    c_t2.write(f"**Nama Supplier:**\n{r_tr.get('Nama Supplier', 'PT. Supplier Utama')}")
-                    c_t3.write(f"**Bahan Baku:**\n{r_tr['Bahan Baku']}")
-                    c_t4.write(f"**Aktivitas:**\n{r_tr['Aktivitas']}")
-                    c_t5.write(f"**Jumlah:**\n{format_indonesia_satuan(r_tr['Jumlah'], r_tr['Satuan'])}")
-
-                    with c_t6:
-                        file_bukti_name = str(r_tr.get("File Bukti", ""))
-                        if file_bukti_name and os.path.exists(os.path.join(FOLDER_BUKTI, file_bukti_name)):
-                            with st.popover("🖼️ Invoice"):
-                                st.image(os.path.join(FOLDER_BUKTI, file_bukti_name), caption=f"Bukti Invoice - {r_tr['Bahan Baku']}")
-                        else:
-                            st.caption("Tanpa Lampiran")
-        else:
-            st.info("Tidak ada pesanan bahan baku yang sedang dalam pengantaran saat ini.")
-
-    # ------------------ TAB 5 ------------------
-    with tab5:
-        st.markdown("#### ⚙️ Pengaturan & Reset Master Data")
-        st.warning("⚠️ Tindakan di bawah ini akan menghapus data yang diunggah dan mengatur ulang transaksi gudang ke kondisi awal.")
-
-        with st.form("form_reset_data"):
-            input_password = st.text_input("Masukkan Kata Sandi Otorisasi Reset:", type="password", placeholder="Ketik kata sandi...")
-            submit_reset = st.form_submit_button("🗑️ Reset Semua Data Gudang & Transaksi")
-
-            if submit_reset:
-                if input_password in ["adm 1", "adm 2"]:
-                    st.session_state["data_gudang"] = None
-                    st.session_state["data_raw_df"] = None
-                    st.session_state["stok_realtime"] = {}
-                    st.session_state.pesanan_dikirim = False
-                    st.session_state.invoice_data = None
-
-                    for key in list(st.session_state.keys()):
-                        if key.startswith("ordered_"):
-                            del st.session_state[key]
-
-                    if os.path.exists(FILE_RIWAYAT):
-                        os.remove(FILE_RIWAYAT)
-                    if os.path.exists(FILE_TRANSIT):
-                        os.remove(FILE_TRANSIT)
-                    st.success(f"✅ Otentikasi berhasil ({input_password}). Semua data gudang & transaksi berhasil di-reset!")
-                    st.rerun()
+                        st.download_button(
+                            label="📄 Download Draft Catatan Internal [.pdf]",
+                            data=bytes_pdf_internal,
+                            file_name=f"Draft_Internal_PO_{nomor_po.replace('/', '_')}.pdf",
+                            mime="application/pdf",
+                            key="btn_dl_pdf_int_total"
+                        )
                 else:
-                    st.error("❌ Kata sandi salah! Gunakan sandi otorisasi 'adm 1' atau 'adm 2'.")
+                    st.success("✅ Tidak ada bahan baku yang berada di bawah Reorder Point (ROP). Belum ada draft PO yang perlu diterbitkan.")
+
+        # ------------------ MODUL 4 ------------------
+        elif selected == "Riwayat Keluar-Masuk":
+            st.markdown("#### 📜 Riwayat Transaksi Mutasi Stok Gudang")
+            df_riwayat = muat_riwayat()
+            if not df_riwayat.empty:
+                df_riwayat_display = df_riwayat.sort_values(by="Waktu", ascending=False).copy()
+                st.dataframe(df_riwayat_display, use_container_width=True)
+
+                buffer_rw = io.BytesIO()
+                with pd.ExcelWriter(buffer_rw, engine='openpyxl') as writer:
+                    df_riwayat_display.to_excel(writer, index=False, sheet_name='Riwayat Mutasi')
+
+                st.download_button(
+                    label="📥 Download Laporan Riwayat (Excel)",
+                    data=buffer_rw.getvalue(),
+                    file_name="Laporan_Riwayat_Mutasi_Stok.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.info("Belum ada riwayat transaksi mutasi yang tercatat.")
+
+            st.markdown("---")
+
+            st.markdown("#### 🚚 Status Pesanan Dalam Proses Pengantaran (Supplier)")
+            df_transit = muat_transit()
+
+            if not df_transit.empty:
+                for idx, r_tr in df_transit.iterrows():
+                    with st.container(border=True):
+                        c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([2, 2.5, 2, 2, 2, 1.5])
+                        c_t1.write(f"**Waktu:**\n{pd.to_datetime(r_tr['Waktu']).strftime('%Y-%m-%d %H:%M:%S')}")
+                        c_t2.write(f"**Nama Supplier:**\n{r_tr.get('Nama Supplier', 'PT. Supplier Utama')}")
+                        c_t3.write(f"**Bahan Baku:**\n{r_tr['Bahan Baku']}")
+                        c_t4.write(f"**Aktivitas:**\n{r_tr['Aktivitas']}")
+                        c_t5.write(f"**Jumlah:**\n{format_indonesia_satuan(r_tr['Jumlah'], r_tr['Satuan'])}")
+
+                        with c_t6:
+                            file_bukti_name = str(r_tr.get("File Bukti", ""))
+                            if file_bukti_name and os.path.exists(os.path.join(FOLDER_BUKTI, file_bukti_name)):
+                                with st.popover("🖼️ Invoice"):
+                                    st.image(os.path.join(FOLDER_BUKTI, file_bukti_name), caption=f"Bukti Invoice - {r_tr['Bahan Baku']}")
+                            else:
+                                st.caption("Tanpa Lampiran")
+            else:
+                st.info("Tidak ada pesanan bahan baku yang sedang dalam pengantaran saat ini.")
+
+        # ------------------ MODUL 5 ------------------
+        elif selected == "Pengaturan & Reset Data":
+            st.markdown("#### ⚙️ Pengaturan & Reset Master Data")
+            st.warning("⚠️ Tindakan di bawah ini akan menghapus data yang diunggah dan mengatur ulang transaksi gudang ke kondisi awal.")
+
+            with st.form("form_reset_data"):
+                input_password = st.text_input("Masukkan Kata Sandi Otorisasi Reset:", type="password", placeholder="Ketik kata sandi...")
+                submit_reset = st.form_submit_button("🗑️ Reset Semua Data Gudang & Transaksi")
+
+                if submit_reset:
+                    if input_password in ["adm 1", "adm 2"]:
+                        st.session_state["data_gudang"] = None
+                        st.session_state["data_raw_df"] = None
+                        st.session_state["stok_realtime"] = {}
+                        st.session_state.pesanan_dikirim = False
+                        st.session_state.invoice_data = None
+
+                        for key in list(st.session_state.keys()):
+                            if key.startswith("ordered_"):
+                                del st.session_state[key]
+
+                        if os.path.exists(FILE_RIWAYAT):
+                            os.remove(FILE_RIWAYAT)
+                        if os.path.exists(FILE_TRANSIT):
+                            os.remove(FILE_TRANSIT)
+                        st.success(f"✅ Otentikasi berhasil ({input_password}). Semua data gudang & transaksi berhasil di-reset!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Kata sandi salah! Gunakan sandi otorisasi 'adm 1' atau 'adm 2'.")
 
 # ============================================================
 # HALAMAN DEFAULT LANDING (JIKA BELUM UPLOAD DATA)
 # ============================================================
 else:
-    st.info("👈 Silakan unggah file template data Excel/CSV di sidebar sebelah kiri untuk memulai sistem monitoring dan perhitungannya.")
+    st.markdown(
+        """
+        <div style="background-color: #1E293B; padding: 16px 20px; border-radius: 8px; border-left: 5px solid #38BDF8; margin-bottom: 20px;">
+            <h3 style="color: #38BDF8; margin: 0; font-size: 18px;">👉 PETUNJUK PENGGUNAAN</h3>
+            <ol style="color: #94A3B8; margin-top: 10px; font-size: 16px; margin-bottom: 0; padding-left: 20px; line-height: 1.8;">
+                <li> Unduh Modul Terlebih Dahulu di Sidebar Sebelah Kiri</li>
+                <li> Silakan Unduh Template Excel Yang Sudah Disediakan Di Sidebar Sebelah Kiri</li>
+                <li> Jika Excel Telah Siap Silakan unggah file template data Excel/CSV di sidebar sebelah kiri untuk memulai sistem monitoring dan perhitungannya.</li>
+            </ol>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.markdown("---")
-    st.markdown("### 📋 Rincian Data Parameter yang Dibutuhkan System")
+    st.markdown("### 📋 Informasi Kebutuhan Data Excel")
     st.markdown(
         "Agar sistem dapat menghitung Reorder Point ($s$), Ukuran Pemesanan ($Q$), dan "
         "Maximum Stock ($S$), file Excel Anda wajib memiliki kolom berikut:"
