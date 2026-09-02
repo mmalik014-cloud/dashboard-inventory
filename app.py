@@ -39,9 +39,9 @@ USERS = {
     "owner1": {"password": "123", "role": "owner", "company_id": "PT.Maju Maju Maju"},
 
     ### ====== PERUSAHAAN B ====== ###
-    "warehouse_b": {"password": "123", "role": "warehouse", "company_id": "PT.Kerja Bagus"},
-    "purchasing_b": {"password": "123", "role": "purchasing", "company_id": "PT.Kerja Bagus"},
-    "owner_b": {"password": "123", "role": "owner", "company_id": "PT.Kerja Bagus"},
+    "warehouse-b": {"password": "1234", "role": "warehouse", "company_id": "PT.Kerja Bagus"},
+    "purchasing-b": {"password": "1234", "role": "purchasing", "company_id": "PT.Kerja Bagus"},
+    "owner-b": {"password": "123", "role": "owner", "company_id": "PT.Kerja Bagus"},
 
     ### ====== PERUSAHAAN C ====== ### Tinggal tambahkan user baru di sini
 }
