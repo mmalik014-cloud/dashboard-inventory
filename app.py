@@ -552,7 +552,7 @@ with st.sidebar:
     st.subheader("📖 Langkah Awal")
     st.link_button(
         label="📘 Buka Modul Tutorial (PDF)",
-        url="https://drive.google.com/file/d/1VZJHOPYJJV22UPfvZ6Mz-Ww56_cPcv5E/view?usp=sharing",
+        url="https://drive.google.com/file/d/1nSj6ISV05yR-BpAmP4MlGPCprDtSkO80/view?usp=sharing",
         use_container_width=True,
         type="primary",
     )
