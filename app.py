@@ -577,67 +577,106 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
     try:
         # Menggunakan openpyxl dengan data_only=True agar nilai rumus Excel tereksekusi menjadi angka
         wb_uploaded = openpyxl.load_workbook(uploaded_file, data_only=True)
+        sheet_names = wb_uploaded.sheetnames
         
-        # Baca Sheet 1 (Data Siap Pakai)
-        if "Data Siap Pakai" in wb_uploaded.sheetnames:
-            sheet_sp = wb_uploaded["Data Siap Pakai"]
-            data_sp = list(sheet_sp.values)
-            df_raw = pd.DataFrame(data_sp[1:], columns=data_sp[0])
+        # 1. BACA SHEET DATA UTAMA (FLEXIBLE SHEET SELECTION)
+        sheet_sp_name = None
+        for s in sheet_names:
+            if "siap pakai" in s.lower() or "data" in s.lower():
+                sheet_sp_name = s
+                break
+        
+        if sheet_sp_name:
+            sheet_sp = wb_uploaded[sheet_sp_name]
         else:
-            sheet_sp = wb_uploaded.active
-            data_sp = list(sheet_sp.values)
-            df_raw = pd.DataFrame(data_sp[1:], columns=data_sp[0])
+            sheet_sp = wb_uploaded.active  # Mengambil sheet pertama jika nama sheet tidak dikenali
 
-        # Baca Sheet 2 (Pengumpulan Data Mentah)
+        data_sp = list(sheet_sp.values)
+        df_raw = pd.DataFrame(data_sp[1:], columns=data_sp[0])
+
+        # 2. BACA SHEET DATA MENTAH (JIKA ADA BULANAN JAN-DES)
         df_mentah = None
-        if "Pengumpulan Data Mentah" in wb_uploaded.sheetnames:
-            sheet_mt = wb_uploaded["Pengumpulan Data Mentah"]
+        sheet_mt_name = None
+        for s in sheet_names:
+            if "mentah" in s.lower() or "pengumpulan" in s.lower():
+                sheet_mt_name = s
+                break
+        
+        if sheet_mt_name:
+            sheet_mt = wb_uploaded[sheet_mt_name]
             data_mt = list(sheet_mt.values)
             df_mentah = pd.DataFrame(data_mt[1:], columns=data_mt[0])
 
-        df_raw.columns = df_raw.columns.astype(str).str.strip()
-        col_nama = "Jenis Barang" if "Jenis Barang" in df_raw.columns else "Bahan Baku"
+        # Bersihkan nama kolom dari spasi berlebih
+        df_raw.columns = [str(col).strip() if col is not None else "" for col in df_raw.columns]
+
+        # 3. DETEKSI NAMA KOLOM SECARA OTOMATIS (CASE-INSENSITIVE)
+        cols_map = {str(col).lower(): col for col in df_raw.columns}
+
+        def cari_kolom(pilihan_kolom):
+            for k in pilihan_kolom:
+                if k.lower() in cols_map:
+                    return cols_map[k.lower()]
+            return None
+
+        col_nama = cari_kolom(["Jenis Barang", "Bahan Baku", "Nama Barang", "Item", "Barang"])
+        col_D = cari_kolom(["D", "Demand", "Permintaan", "Demand Tahunan"])
+        col_L = cari_kolom(["L", "Lead Time", "Waktu Tunggu"])
+        col_A = cari_kolom(["A", "Biaya Pesan", "Ordering Cost"])
+        col_h = cari_kolom(["h", "Biaya Simpan", "Holding Cost"])
+        col_Cu = cari_kolom(["Cu", "Biaya Kekurangan", "Shortage Cost"])
+        col_pi = cari_kolom(["pi", "Harga", "Harga Satuan", "Price"])
+        col_sigma = cari_kolom(["Sigma", "Std Dev", "Deviasi Standar"])
+        col_satuan = cari_kolom(["Satuan", "Unit"])
+
+        if not col_nama or not col_D:
+            st.error("❌ Format Excel tidak sesuai! Pastikan memiliki kolom nama barang (cth: 'Bahan Baku' / 'Jenis Barang') dan permintaan (cth: 'D').")
+            st.stop()
+
         df = df_raw.dropna(subset=[col_nama]).copy()
         df["Bahan_Nama"] = df[col_nama].astype(str).str.strip()
-        df["D_num"] = df["D"].apply(bersihkan_angka)
+        df["D_num"] = df[col_D].apply(bersihkan_angka)
 
-        # Hitung Sigma di Python (Berdasarkan data bulanan dari Sheet 2)
+        # Hitung Sigma di Python (Berdasarkan data bulanan dari Sheet 2 jika ada)
         def hitung_sigma_python(row_sp):
             nama_bhn = str(row_sp["Bahan_Nama"]).strip()
             if df_mentah is not None and not df_mentah.empty:
-                col_bhn_m = "Jenis Barang" if "Jenis Barang" in df_mentah.columns else df_mentah.columns[0]
+                df_mentah.columns = [str(col).strip() if col is not None else "" for col in df_mentah.columns]
+                col_bhn_m = df_mentah.columns[0]
+                for c in df_mentah.columns:
+                    if str(c).lower() in ["jenis barang", "bahan baku", "nama barang"]:
+                        col_bhn_m = c
+                        break
+                
                 match = df_mentah[df_mentah[col_bhn_m].astype(str).str.strip() == nama_bhn]
                 if not match.empty:
-                    # Ambil kolom bulanan (kolom indeks 2 sampai 14 / Jan-Des)
+                    # Ambil 12 kolom bulanan setelah nama barang
                     vals = match.iloc[0, 2:14].values
                     vals_clean = [bersihkan_angka(v) for v in vals if pd.notna(v)]
                     if len(vals_clean) > 1:
-                        # Deviasi Standar Sampel Bulanan * SQRT(12) untuk disetahunkan
                         std_bulanan = pd.Series(vals_clean).std(ddof=1)
                         return float(std_bulanan * math.sqrt(12))
-            
-            # Fallback jika kolom Sigma ada di sheet 1
-            if "Sigma" in row_sp and pd.notna(row_sp["Sigma"]):
-                return bersihkan_angka(row_sp["Sigma"])
+
+            if col_sigma and col_sigma in row_sp and pd.notna(row_sp[col_sigma]):
+                return bersihkan_angka(row_sp[col_sigma])
             return 0.0
 
         df["Sigma_num"] = df.apply(hitung_sigma_python, axis=1)
 
-        df["L_hari"] = df["L"].apply(bersihkan_angka)
+        df["L_hari"] = df[col_L].apply(bersihkan_angka) if col_L else 0.0
         df["L_num"] = df["L_hari"].apply(lambda val: val / 365.0 if val > 1.0 else val)
 
-        df["A_num"] = df["A"].apply(bersihkan_angka)
-        df["h_num"] = df["h"].apply(bersihkan_angka)
-        df["Cu_num"] = df["Cu"].apply(bersihkan_angka) if "Cu" in df_raw.columns else 0.0
+        df["A_num"] = df[col_A].apply(bersihkan_angka) if col_A else 0.0
+        df["h_num"] = df[col_h].apply(bersihkan_angka) if col_h else 0.0
+        df["Cu_num"] = df[col_Cu].apply(bersihkan_angka) if col_Cu else 0.0
 
-        if "pi" in df_raw.columns:
-            df["pi_num"] = df["pi"].apply(bersihkan_angka)
+        if col_pi:
+            df["pi_num"] = df[col_pi].apply(bersihkan_angka)
         else:
             df["pi_num"] = df["Cu_num"]
 
-        satuan_col = [col for col in df_raw.columns if col.strip().lower() == 'satuan']
-        if satuan_col:
-            df["Satuan"] = df[satuan_col[0]].fillna("pcs").astype(str).str.strip()
+        if col_satuan:
+            df["Satuan"] = df[col_satuan].fillna("pcs").astype(str).str.strip()
             df["Satuan"] = df["Satuan"].replace("", "pcs")
         else:
             df["Satuan"] = "pcs"
@@ -719,7 +758,7 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
         st.session_state["data_gudang"] = pd.DataFrame(hasil_perhitungan)
     except Exception as e:
         st.error(f"Gagal memproses data template Excel: {e}")
-
+        
 # ============================================================
 # TAMPILAN DASHBOARD & AKSI FITUR UTAMA
 # ============================================================
