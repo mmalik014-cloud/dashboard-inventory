@@ -33,10 +33,17 @@ except ImportError:
 # 1. DATABASE USER & PERUSAHAAN
 # ------------------------------------------------------------------------------
 USERS = {
-    "warehouse1": {"password": "123", "role": "warehouse", "company_id": "PT_A"},
-    "purchasing1": {"password": "123", "role": "purchasing", "company_id": "PT_A"},
-    "owner1": {"password": "123", "role": "owner", "company_id": "PT_A"},
-    "owner_b": {"password": "123", "role": "owner", "company_id": "PT_B"},
+    ### ====== PERUSAHAAN A ====== ###
+    "warehouse1": {"password": "123", "role": "warehouse", "company_id": "PT.Maju Maju Maju"},
+    "purchasing1": {"password": "123", "role": "purchasing", "company_id": "PT.Maju Maju Maju"},
+    "owner1": {"password": "123", "role": "owner", "company_id": "PT.Maju Maju Maju"},
+
+    ### ====== PERUSAHAAN B ====== ###
+    "warehouse_b": {"password": "123", "role": "warehouse", "company_id": "PT.Kerja Bagus"},
+    "purchasing_b": {"password": "123", "role": "purchasing", "company_id": "PT.Kerja Bagus"},
+    "owner_b": {"password": "123", "role": "owner", "company_id": "PT.Kerja Bagus"},
+
+    ### ====== PERUSAHAAN C ====== ### Tinggal tambahkan user baru di sini
 }
 
 # ------------------------------------------------------------------------------
@@ -50,7 +57,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------------------
-# FUNGSI ENCODE GAMBAR LOKAL KE BASE64 (UNTUK BACKGROUND)
+# FUNGSI ENCODE GAMBAR LOKAL KE BASE (UNTUK BACKGROUND)
 # ------------------------------------------------------------------------------
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, 'rb') as f:
@@ -58,54 +65,77 @@ def get_base64_of_bin_file(bin_file):
     return base64.b64encode(data).decode()
 
 # ------------------------------------------------------------------------------
-# 3. SISTEM LOGIN & MULTI-TENANCY (FULLSCREEN AI BACKGROUND LOKAL)
+# 3. SISTEM LOGIN & MULTI-TENANCY (FULLSCREEN BACKGROUND LOKAL/GITHUB)
 # ------------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
+# Setingan Background
+NAMA_FILE_GAMBAR = "Background Dashboard.jpg" 
+
+if os.path.exists(NAMA_FILE_GAMBAR):
+    bin_str = get_base64_of_bin_file(NAMA_FILE_GAMBAR)
+    bg_style = f"""
+        background: linear-gradient(rgba(11, 15, 25, 0.65), rgba(11, 15, 25, 0.98)), url("data:image/jpeg;base64,{bin_str}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    """
+else:
+    bg_style = """
+        background-color: #0b0f19;
+        background-image:
+            radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.5) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
+    """
+st.markdown(
+    f"""
+    <style>
+    header, footer {{ visibility: hidden; }}
+
+    .stApp {{
+        {bg_style}
+    }}
+
+    /* Pelapis Gelap HANYA Muncul di Dashboard (Setelah Login) */
+    .stAppHeader + div .stMainBlockContainer {{
+        background-color: rgba(15, 23, 42, 0.85) !important;
+        backdrop-filter: blur(8px);
+        padding: 2.5rem !important;
+        border-radius: 15px !important;
+        margin-top: 1rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }}
+
+    /* Halaman Login Tetap Bersih (Tanpa Pelapis Besar) */
+    div[data-testid="stForm"] {{
+        background: transparent !important;
+    }}
+
+    /* Card Login Glassmorphism */
+    div[data-testid="stVerticalBlockBorderWrapper"] {{
+        background: rgba(15, 23, 42, 0.85) !important;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 20px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        padding: 30px !important;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+# Kode Login akan dimulai setelah background terpasang
 if not st.session_state["logged_in"]:
-    # NAMA FILE GAMBAR AI KAMU (Taruh file gambar di folder yang sama dengan app.py)
-    NAMA_FILE_GAMBAR = "background.jpg"
-
-    # Jika file gambar AI ada di folder, pakai sebagai background. Jika belum ada, pakai background gradasi gelap modern.
-    if os.path.exists(NAMA_FILE_GAMBAR):
-        bin_str = get_base64_of_bin_file(NAMA_FILE_GAMBAR)
-        bg_style = f"""
-            background: linear-gradient(rgba(11, 15, 25, 0.65), rgba(11, 15, 25, 0.65)), url("data:image/jpg;base64,{bin_str}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        """
-    else:
-        bg_style = """
-            background-color: #0b0f19;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.5) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        """
-
+    # TEKS JUDUL BACKGROUND
     st.markdown(
-        f"""
-        <style>
-        header, footer {{ visibility: hidden; }}
-        
-        .stApp {{
-            {bg_style}
-        }}
-
-        /* Card Login Glassmorphism */
-        div[data-testid="stVerticalBlockBorderWrapper"] {{
-            background: rgba(15, 23, 42, 0.85) !important;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-radius: 20px !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-            padding: 30px !important;
-        }}
-        </style>
-        """,
+        """
+        <h2 style='text-align: center; color: white; font-weight: bold; margin-bottom: 25px; text-transform: uppercase; tracking-spacing: 1px;'>
+            INTEGRATED INVENTORY CONTROL & REAL-TIME MONITORING SYSTEM
+        </h2>
+        """, 
         unsafe_allow_html=True
     )
 
@@ -157,95 +187,20 @@ elif role == "owner":
     allowed_menus = ["Live Monitoring & Chart", "Riwayat Keluar-Masuk", "Analisis Sensitivitas", "Draft Surat PO", "Pengaturan & Reset Data"]
 
 # ==========================================
-# 5. FUNGSI PEMBUAT TEMPLATE EXCEL (2 SHEET)
+# FUNGSI MEMBACA FILE TEMPLATE EXCEL FISIK
 # ==========================================
 def buat_template_excel():
-    output = io.BytesIO()
-    wb = openpyxl.Workbook()
-
-    rupiah_format = '"Rp "#,##0.00'
-    rupiah_format_integer = '"Rp "#,##0'
-
-    ws1 = wb.active
-    ws1.title = "Data Siap Pakai"
-
-    headers1 = ["Jenis Barang", "D", "Sigma", "L", "A", "h", "Cu", "pi", "Satuan"]
-    ws1.append(headers1)
-
-    ws1.append([
-        "='Pengumpulan Data Mentah'!A2",
-        "=SUM('Pengumpulan Data Mentah'!C2:N2)",
-        "=STDEV.S('Pengumpulan Data Mentah'!C2:N2)*SQRT(12)",
-        4,
-        13799,
-        28.33,
-        21000, 
-        22890, 
-        "='Pengumpulan Data Mentah'!B2"
-    ])
-
-    ws1['E2'].number_format = rupiah_format_integer  
-    ws1['F2'].number_format = rupiah_format          
-    ws1['G2'].number_format = rupiah_format_integer  
-    ws1['H2'].number_format = rupiah_format_integer  
-
-    ws1['J4'] = "Keterangan Singkatan Parameter (Sheet 1)"
-    keterangan_sheet1 = [
-        ("D", "Demand atau Permintaan Tahunan (Total pemakaian 1 tahun)"),
-        ("Sigma", "Deviasi Standar Tahunan (Tingkat fluktuasi pemakaian disetahunkan)"),
-        ("L", "Lead Time atau Waktu Tunggu Pengiriman (Dalam Satuan HARI)"),
-        ("A", "Biaya Per Pesan atau Ordering Cost (Rp per kali pesan)"),
-        ("h", "Biaya Simpan atau Holding Cost (Rp per unit per tahun)"),
-        ("Cu", "Biaya Kekurangan atau Shortage Cost (Rp per unit jika backorder)"),
-        ("pi", "Harga Beli Bahan Baku (Rp per unit)"),
-        ("Satuan", "Satuan Ukur Barang (kg, pcs, box, dll)")
-    ]
-    for idx, (param, ket) in enumerate(keterangan_sheet1, start=5):
-        ws1[f'J{idx}'] = param
-        ws1[f'K{idx}'] = ket
-
-    ws2 = wb.create_sheet(title="Pengumpulan Data Mentah")
-
-    headers2 = [
-        "Jenis Barang", "Satuan",
-        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-        "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-        "Total Pemakaian", "Deviasi Bulanan"
-    ]
-    ws2.append(headers2)
-
-    ws2.append([
-        "Aluminium", "kg",
-        650000, 620000, 680000, 640000, 700000, 610000,
-        630000, 660000, 650000, 670000, 690000, 766736,
-        "=SUM(C2:N2)", "=STDEV.S(C2:N2)"
-    ])
-
-    ws2['R1'] = "Keterangan Pengumpulan Data Mentah (Sheet 2)"
-    keterangan_sheet2 = [
-        ("Jan - Des", "Data historis pemakaian riil bulanan pengguna"),
-        ("Total Pemakaian", "Akumulasi permintaan 12 bulan (menjadi D di Sheet 1)"),
-        ("Deviasi Bulanan", "Standar deviasi pemakaian bulanan (disetahunkan di Sheet 1)")
-    ]
-    for idx, (param, ket) in enumerate(keterangan_sheet2, start=2):
-        ws2[f'R{idx}'] = param
-        ws2[f'S{idx}'] = ket
-
-    for ws in [ws1, ws2]:
-        for col in ws.columns:
-            max_len = 0
-            col_letter = openpyxl.utils.get_column_letter(col[0].column)
-            for cell in col:
-                val_str = str(cell.value) if cell.value else ""
-                if not val_str.startswith("="):
-                    max_len = max(max_len, len(val_str))
-            if max_len > 0:
-                ws.column_dimensions[col_letter].width = max(max_len + 5, 12)
-
-    wb.save(output)
-    return output.getvalue()
-
+    NAMA_FILE_TEMPLATE = "Template_Data_Excel.xlsx" 
+    if os.path.exists(NAMA_FILE_TEMPLATE):
+        with open(NAMA_FILE_TEMPLATE, "rb") as f:
+            return f.read()
+    else:
+        st.error(f"File '{NAMA_FILE_TEMPLATE}' tidak ditemukan di direktori!")
+        return b""
+    
+# ===========================================================
 # Inisialisasi state transaksi & invoice bawaan
+#===========================================================
 if "pesanan_dikirim" not in st.session_state:
     st.session_state.pesanan_dikirim = False
 if "invoice_data" not in st.session_state:
@@ -327,25 +282,28 @@ def format_persen_indo(nilai):
 # ============================================================
 # MANAJEMEN RIWAYAT TRANSAKSI & PESANAN TRANSIT
 # ============================================================
+
+KOLOM_RIWAYAT = ["Waktu", "Tanggal", "Bulan", "Bahan Baku", "Aktivitas", "Jumlah", "Satuan"]
+KOLOM_TRANSIT = ["Waktu", "Tanggal", "Bulan", "Nama Supplier", "Bahan Baku", "Aktivitas", "Jumlah", "Satuan", "File Bukti"]
+
 def muat_riwayat():
-    kolom_standar = ["Waktu", "Tanggal", "Bulan", "Bahan Baku", "Aktivitas", "Jumlah", "Satuan"]
     if os.path.exists(FILE_RIWAYAT):
         try:
             df_log = pd.read_excel(FILE_RIWAYAT)
-            for col in kolom_standar:
-                if col not in df_log.columns:
-                    df_log[col] = 0.0 if col == "Jumlah" else ""
+            # Pastikan kolom sesuai standar
+            df_log = df_log.reindex(columns=KOLOM_RIWAYAT)
             df_log["Waktu"] = pd.to_datetime(df_log["Waktu"])
             return df_log
-        except:
-            pass
-    return pd.DataFrame(columns=kolom_standar)
+        except Exception as e:
+            st.error(f"Gagal membaca file riwayat: {e}")
+    return pd.DataFrame(columns=KOLOM_RIWAYAT)
 
 def catat_transaksi(bahan, aktivitas, jumlah, satuan="pcs"):
     df_log = muat_riwayat()
     sekarang = datetime.now()
+    
     data_baru = pd.DataFrame([{
-        "Waktu": sekarang,
+        "Waktu": sekarang.strftime("%Y-%m-%d %H:%M:%S"),
         "Tanggal": sekarang.strftime("%Y-%m-%d"),
         "Bulan": sekarang.strftime("%Y-%m"),
         "Bahan Baku": bahan,
@@ -353,22 +311,21 @@ def catat_transaksi(bahan, aktivitas, jumlah, satuan="pcs"):
         "Jumlah": jumlah,
         "Satuan": satuan
     }])
+    
     df_log = pd.concat([df_log, data_baru], ignore_index=True)
     df_log.to_excel(FILE_RIWAYAT, index=False)
 
 def muat_transit():
-    kolom_standar = ["Waktu", "Tanggal", "Bulan", "Nama Supplier", "Bahan Baku", "Aktivitas", "Jumlah", "Satuan", "File Bukti"]
     if os.path.exists(FILE_TRANSIT):
         try:
             df_tr = pd.read_excel(FILE_TRANSIT)
-            for col in kolom_standar:
-                if col not in df_tr.columns:
-                    df_tr[col] = 0.0 if col == "Jumlah" else ""
+            # Pastikan kolom sesuai standar
+            df_tr = df_tr.reindex(columns=KOLOM_TRANSIT)
             df_tr["Waktu"] = pd.to_datetime(df_tr["Waktu"])
             return df_tr
-        except:
-            pass
-    return pd.DataFrame(columns=kolom_standar)
+        except Exception as e:
+            st.error(f"Gagal membaca file transit: {e}")
+    return pd.DataFrame(columns=KOLOM_TRANSIT)
 
 def catat_transit(bahan, jumlah, satuan, supplier="PT. Supplier Utama", file_upload=None):
     df_tr = muat_transit()
@@ -379,11 +336,15 @@ def catat_transit(bahan, jumlah, satuan, supplier="PT. Supplier Utama", file_upl
         ext = file_upload.name.split(".")[-1]
         nama_file_bukti = f"invoice_{bahan}_{sekarang.strftime('%Y%m%d_%H%M%S')}.{ext}"
         path_simpan = os.path.join(FOLDER_BUKTI, nama_file_bukti)
+        
+        # Buat folder jika belum ada
+        os.makedirs(FOLDER_BUKTI, exist_ok=True)
+        
         with open(path_simpan, "wb") as f:
             f.write(file_upload.getbuffer())
 
     data_baru = pd.DataFrame([{
-        "Waktu": sekarang,
+        "Waktu": sekarang.strftime("%Y-%m-%d %H:%M:%S"),
         "Tanggal": sekarang.strftime("%Y-%m-%d"),
         "Bulan": sekarang.strftime("%Y-%m"),
         "Nama Supplier": supplier,
@@ -393,6 +354,7 @@ def catat_transit(bahan, jumlah, satuan, supplier="PT. Supplier Utama", file_upl
         "Satuan": satuan,
         "File Bukti": nama_file_bukti
     }])
+    
     df_tr = pd.concat([df_tr, data_baru], ignore_index=True)
     df_tr.to_excel(FILE_TRANSIT, index=False)
     st.session_state.pesanan_dikirim = True
@@ -400,12 +362,14 @@ def catat_transit(bahan, jumlah, satuan, supplier="PT. Supplier Utama", file_upl
 def edit_gambar_transit(bahan, file_upload_baru):
     df_tr = muat_transit()
     if not df_tr.empty and bahan in df_tr["Bahan Baku"].values:
+        # Ambil indeks paling akhir untuk bahan tersebut
         idx = df_tr[df_tr["Bahan Baku"] == bahan].index[-1]
         sekarang = datetime.now()
         ext = file_upload_baru.name.split(".")[-1]
         nama_file_baru = f"invoice_{bahan}_{sekarang.strftime('%Y%m%d_%H%M%S')}.{ext}"
         path_simpan = os.path.join(FOLDER_BUKTI, nama_file_baru)
 
+        os.makedirs(FOLDER_BUKTI, exist_ok=True)
         with open(path_simpan, "wb") as f:
             f.write(file_upload_baru.getbuffer())
 
@@ -588,7 +552,7 @@ with st.sidebar:
     st.subheader("📖 Langkah Awal")
     st.link_button(
         label="📘 Buka Modul Tutorial (PDF)",
-        url="https://drive.google.com/file/d/1GgQSKhsgIEGtPMM3uR9qj8V5xl852cvs/view?usp=sharing",
+        url="https://drive.google.com/file/d/1VZJHOPYJJV22UPfvZ6Mz-Ww56_cPcv5E/view?usp=sharing",
         use_container_width=True,
         type="primary",
     )
@@ -611,22 +575,53 @@ with st.sidebar:
 # ============================================================
 if uploaded_file is not None and st.session_state["data_gudang"] is None:
     try:
-        if uploaded_file.name.endswith(".csv"):
-            df_raw = pd.read_csv(uploaded_file, delimiter=";")
+        # Menggunakan openpyxl dengan data_only=True agar nilai rumus Excel tereksekusi menjadi angka
+        wb_uploaded = openpyxl.load_workbook(uploaded_file, data_only=True)
+        
+        # Baca Sheet 1 (Data Siap Pakai)
+        if "Data Siap Pakai" in wb_uploaded.sheetnames:
+            sheet_sp = wb_uploaded["Data Siap Pakai"]
+            data_sp = list(sheet_sp.values)
+            df_raw = pd.DataFrame(data_sp[1:], columns=data_sp[0])
         else:
-            xl = pd.ExcelFile(uploaded_file)
-            if "Data Siap Pakai" in xl.sheet_names:
-                df_raw = pd.read_excel(uploaded_file, sheet_name="Data Siap Pakai")
-            else:
-                df_raw = pd.read_excel(uploaded_file, sheet_name=0)
+            sheet_sp = wb_uploaded.active
+            data_sp = list(sheet_sp.values)
+            df_raw = pd.DataFrame(data_sp[1:], columns=data_sp[0])
+
+        # Baca Sheet 2 (Pengumpulan Data Mentah)
+        df_mentah = None
+        if "Pengumpulan Data Mentah" in wb_uploaded.sheetnames:
+            sheet_mt = wb_uploaded["Pengumpulan Data Mentah"]
+            data_mt = list(sheet_mt.values)
+            df_mentah = pd.DataFrame(data_mt[1:], columns=data_mt[0])
 
         df_raw.columns = df_raw.columns.astype(str).str.strip()
         col_nama = "Jenis Barang" if "Jenis Barang" in df_raw.columns else "Bahan Baku"
         df = df_raw.dropna(subset=[col_nama]).copy()
-
         df["Bahan_Nama"] = df[col_nama].astype(str).str.strip()
         df["D_num"] = df["D"].apply(bersihkan_angka)
-        df["Sigma_num"] = df["Sigma"].apply(bersihkan_angka)
+
+        # Hitung Sigma di Python (Berdasarkan data bulanan dari Sheet 2)
+        def hitung_sigma_python(row_sp):
+            nama_bhn = str(row_sp["Bahan_Nama"]).strip()
+            if df_mentah is not None and not df_mentah.empty:
+                col_bhn_m = "Jenis Barang" if "Jenis Barang" in df_mentah.columns else df_mentah.columns[0]
+                match = df_mentah[df_mentah[col_bhn_m].astype(str).str.strip() == nama_bhn]
+                if not match.empty:
+                    # Ambil kolom bulanan (kolom indeks 2 sampai 14 / Jan-Des)
+                    vals = match.iloc[0, 2:14].values
+                    vals_clean = [bersihkan_angka(v) for v in vals if pd.notna(v)]
+                    if len(vals_clean) > 1:
+                        # Deviasi Standar Sampel Bulanan * SQRT(12) untuk disetahunkan
+                        std_bulanan = pd.Series(vals_clean).std(ddof=1)
+                        return float(std_bulanan * math.sqrt(12))
+            
+            # Fallback jika kolom Sigma ada di sheet 1
+            if "Sigma" in row_sp and pd.notna(row_sp["Sigma"]):
+                return bersihkan_angka(row_sp["Sigma"])
+            return 0.0
+
+        df["Sigma_num"] = df.apply(hitung_sigma_python, axis=1)
 
         df["L_hari"] = df["L"].apply(bersihkan_angka)
         df["L_num"] = df["L_hari"].apply(lambda val: val / 365.0 if val > 1.0 else val)
@@ -1390,29 +1385,26 @@ else:
     with col_a:
         st.markdown("""
         **1. Demand ($D$) - Total Permintaan Tahunan**
-        * **Apa itu?** Total jumlah pemakaian barang dalam 1 tahun.
+        * **Apa itu?** Total jumlah pemakaian barang dalam (Misal 1 tahun).
         * **Cara dapatnya:** Jumlahkan total pemakaian dari bulan Januari sampai Desember.
 
-        **2. Standar Deviasi / Sigma ($\sigma$) - Fluktuasi Pemakaian**
-        * **Apa itu?** Angka yang menunjukkan seberapa fluktuatif pemakaian barang tiap bulannya.
-        * **Cara dapatnya:** Gunakan rumus Excel `=STDEV.S(data_12_bulan)*SQRT(12)`.
-
-        **3. Lead Time ($L$) - Waktu Tunggu Pengiriman**
+        **2. Lead Time ($L$) - Waktu Tunggu Pengiriman**
         * **Apa itu?** Durasi waktu sejak barang dipesan sampai tiba di gudang.
-        * **Cara dapatnya:** Jika supplier butuh waktu 30 hari, isi angka 30.
+        * **Cara dapatnya:** Jika supplier butuh waktu 3 hari, isi angka 3.
+
+        **3. Biaya Pesan ($A$) - Ordering Cost**
+        * **Apa itu?** Biaya yang keluar setiap kali Anda melakukan 1 kali pemesanan.(contoh : biaya Administrasi, Print, Telfon, dsb)
         """)
 
     with col_b:
         st.markdown("""
-        **4. Biaya Pesan ($A$) - Ordering Cost**
-        * **Apa itu?** Biaya yang keluar setiap kali Anda melakukan 1 kali pemesanan.
+        **4. Biaya Simpan ($h$) - Holding Cost**
+        * **Apa itu?** Biaya untuk menyimpan 1 unit barang di gudang selama 1 TAHUN. (Contoh: biaya sewa gudang, biaya listrik, biaya keamanan, dsb)
 
-        **5. Biaya Simpan ($h$) - Holding Cost**
-        * **Apa itu?** Biaya untuk menyimpan 1 unit barang di gudang selama 1 TAHUN.
+        **5. Biaya Kekurangan ($C_u$) - Shortage Cost & Satuan**
+        * **Biaya Kekurangan:** Estimasi biaya denda jika persediaan gudang HABIS saat produksi berjalan. (Contoh: biaya keterlambatan produksi, biaya Emergency Purchase, dsb)
 
-        **6. Biaya Kekurangan ($C_u$) - Shortage Cost & Satuan**
-        * **Biaya Kekurangan:** Estimasi biaya denda jika persediaan gudang HABIS saat produksi berjalan.
-        * **Satuan (Kolom I):** Satuan ukur barang (contoh: `pcs`, `kg`, `box`, `roll`, `rim`).
+        **6. Satuan (Kolom I):** Satuan ukur barang (contoh: `pcs`, `kg`, `box`, `roll`, `rim`).
         """)
 
     st.markdown("---")
