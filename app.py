@@ -214,7 +214,7 @@ st.markdown(
             📦 INTEGRATED INVENTORY CONTROL & REAL-TIME MONITORING SYSTEM
         </h2>
         <p style="font-size: 22px; color: #A0AAB8; font-weight: 500; margin-top: 0;">
-            Alat Pendukung Keputusan Persediaan Probabilistik (s,S) Dan (s,Q) Berbasis Algoritma Hadley–Whitin Dan Otomasi ABC Analysis
+            Alat Pendukung Keputusan Persediaan Probabilistik (s,S) Dan (s,Q) Berbasis Algoritma Hadley–Whitin
         </p>
     </div>
     """,
@@ -1448,5 +1448,5 @@ else:
 
     st.markdown("---")
     st.success(
-        "💡 Bingung mulai dari mana? klik tombol **'📥 Unduh Template Excel Otomatis'** di Panel sebelah kiri dan biarkan template yang kerja keras. Cukup Unduh & Isi, lalu kirim dan nikmati hidup tanpa drama 'kolom tidak sesuai format'."
+        "💡 Panduan Pengguna: Untuk mempermudah penggunaan sistem, panduan lengkap dapat diakses melalui modul pada panel kiri. Pengguna juga disarankan untuk mengunduh template Excel resmi, melengkapi data sesuai format, dan mengunggahnya kembali."
     )
