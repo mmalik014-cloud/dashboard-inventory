@@ -92,23 +92,22 @@ else:
 st.markdown(
     f"""
     <style>
-    header, footer {{ visibility: hidden; }}
+    /* Footer tetap disembunyikan agar bersih */
+    footer {{ visibility: hidden; }}
 
     .stApp {{
         {bg_style}
     }}
 
-    /* Pelapis Gelap HANYA Muncul di Dashboard (Setelah Login) */
+    /* Membuat area konten utama benar-benar transparan tanpa kotak gelap */
     .stAppHeader + div .stMainBlockContainer {{
-        background-color: rgba(15, 23, 42, 0.85) !important;
-        backdrop-filter: blur(8px);
-        padding: 2.5rem !important;
-        border-radius: 15px !important;
-        margin-top: 1rem;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        background-color: transparent !important;
+        backdrop-filter: none !important;
+        box-shadow: none !important;
+        padding-top: 1rem !important;
     }}
 
-    /* Halaman Login Tetap Bersih (Tanpa Pelapis Besar) */
+    /* Halaman Login Tetap Bersih */
     div[data-testid="stForm"] {{
         background: transparent !important;
     }}
