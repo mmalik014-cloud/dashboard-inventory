@@ -595,7 +595,7 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
         col_satuan = cari_kolom(["Satuan", "Unit"])
 
         if not col_nama or not col_D:
-            st.error("❌ Format Excel tidak sesuai! Pastikan memiliki kolom nama barang (cth: 'Bahan Baku' / 'Jenis Barang') dan permintaan (cth: 'D').")
+            st.error("❌ Format Excel tidak sesuai! Pastikan Data Yang Dibutuhkan Sesuai Dengan Syarat")
             st.stop()
 
         df = df_raw.dropna(subset=[col_nama]).copy()
