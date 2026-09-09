@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Integrated Inventory Control & Real-Time Monitoring System
 Continuous Review Hadley-Whitin & ABC Analysis Implementation
@@ -17,9 +16,7 @@ from scipy.stats import norm
 import streamlit as st
 from streamlit_option_menu import option_menu
 
-# ============================================================
-# IMPOR LIBRARY REPORTLAB (PEMBUATAN DOKUMEN PDF)
-# ============================================================
+# IMPOR LIBRARY REPORTLAB BUAT PDF
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -29,9 +26,7 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
 
-# ------------------------------------------------------------------------------
-# 1. DATABASE USER & PERUSAHAAN
-# ------------------------------------------------------------------------------
+# DATABASE AKUN USER & PERUSAHAAN
 USERS = {
     ### ====== PERUSAHAAN A ====== ###
     "warehouse1": {"password": "123", "role": "warehouse", "company_id": "PT.Maju Maju Maju"},
@@ -43,12 +38,9 @@ USERS = {
     "purchasing-b": {"password": "1234", "role": "purchasing", "company_id": "PT.Kerja Bagus"},
     "owner-b": {"password": "1234", "role": "owner", "company_id": "PT.Kerja Bagus"},
 
-    ### ====== PERUSAHAAN C ====== ### Tinggal tambahkan user baru di sini
 }
 
-# ------------------------------------------------------------------------------
-# 2. KONFIGURASI HALAMAN DASHBOARD & TEMA
-# ------------------------------------------------------------------------------
+# KONFIGURASI HALAMAN DASHBOARD & TEMA
 st.set_page_config(
     page_title="Smart Inventory Systems",
     page_icon="🏭",
@@ -56,17 +48,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ------------------------------------------------------------------------------
-# FUNGSI ENCODE GAMBAR LOKAL KE BASE (UNTUK BACKGROUND)
-# ------------------------------------------------------------------------------
+# FUNGSI ENCODE GAMBAR UNTUK BACKGROUND
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, 'rb') as f:
         data = f.read()
     return base64.b64encode(data).decode()
 
-# ------------------------------------------------------------------------------
-# 3. SISTEM LOGIN & MULTI-TENANCY (FULLSCREEN BACKGROUND LOKAL/GITHUB)
-# ------------------------------------------------------------------------------
+# SISTEM LOGIN & MULTI-TENANCY
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
@@ -126,7 +114,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-# Kode Login akan dimulai setelah background terpasang
+
 if not st.session_state["logged_in"]:
     # TEKS JUDUL BACKGROUND
     st.markdown(
@@ -173,9 +161,7 @@ if st.sidebar.button("Logout"):
     st.session_state["logged_in"] = False
     st.rerun()
 
-# ------------------------------------------------------------------------------
-# 4. FILTER HAK AKSES MENU (ROLE-BASED ACCESS CONTROL)
-# ------------------------------------------------------------------------------
+# FILTER HAK AKSES MENU (ROLE-BASED ACCESS CONTROL)
 role = st.session_state["role"]
 
 if role == "warehouse":
@@ -185,9 +171,7 @@ elif role == "purchasing":
 elif role == "owner":
     allowed_menus = ["Live Monitoring & Chart", "Riwayat Keluar-Masuk", "Analisis Sensitivitas", "Draft Surat PO", "Pengaturan & Reset Data"]
 
-# ==========================================
-# FUNGSI MEMBACA FILE TEMPLATE EXCEL FISIK
-# ==========================================
+# MEMBACA FILE TEMPLATE EXCEL
 def buat_template_excel():
     NAMA_FILE_TEMPLATE = "Template_Data_Excel.xlsx" 
     if os.path.exists(NAMA_FILE_TEMPLATE):
@@ -197,9 +181,7 @@ def buat_template_excel():
         st.error(f"File '{NAMA_FILE_TEMPLATE}' tidak ditemukan di direktori!")
         return b""
     
-# ===========================================================
-# Inisialisasi state transaksi & invoice bawaan
-#===========================================================
+# Inisialisasi transaksi & invoice
 if "pesanan_dikirim" not in st.session_state:
     st.session_state.pesanan_dikirim = False
 if "invoice_data" not in st.session_state:
@@ -227,9 +209,7 @@ FOLDER_BUKTI = "bukti_invoice"
 if not os.path.exists(FOLDER_BUKTI):
     os.makedirs(FOLDER_BUKTI, exist_ok=True)
 
-# ============================================================
-# FUNGSI HELPER & FORMATTING ANGKA
-# ============================================================
+# HELPER & FORMATTING ANGKA
 def bersihkan_angka(nilai):
     if pd.isna(nilai) or nilai is None:
         return 0.0
@@ -278,10 +258,7 @@ def format_persen_indo(nilai):
     except:
         return str(nilai)
 
-# ============================================================
-# MANAJEMEN RIWAYAT TRANSAKSI & PESANAN TRANSIT
-# ============================================================
-
+# MANAJEMEN RIWAYAT TRANSAKSI & PESANAN
 KOLOM_RIWAYAT = ["Waktu", "Tanggal", "Bulan", "Bahan Baku", "Aktivitas", "Jumlah", "Satuan"]
 KOLOM_TRANSIT = ["Waktu", "Tanggal", "Bulan", "Nama Supplier", "Bahan Baku", "Aktivitas", "Jumlah", "Satuan", "File Bukti"]
 
@@ -318,7 +295,6 @@ def muat_transit():
     if os.path.exists(FILE_TRANSIT):
         try:
             df_tr = pd.read_excel(FILE_TRANSIT)
-            # Pastikan kolom sesuai standar
             df_tr = df_tr.reindex(columns=KOLOM_TRANSIT)
             df_tr["Waktu"] = pd.to_datetime(df_tr["Waktu"])
             return df_tr
@@ -336,7 +312,6 @@ def catat_transit(bahan, jumlah, satuan, supplier="PT. Supplier Utama", file_upl
         nama_file_bukti = f"invoice_{bahan}_{sekarang.strftime('%Y%m%d_%H%M%S')}.{ext}"
         path_simpan = os.path.join(FOLDER_BUKTI, nama_file_bukti)
         
-        # Buat folder jika belum ada
         os.makedirs(FOLDER_BUKTI, exist_ok=True)
         
         with open(path_simpan, "wb") as f:
@@ -361,7 +336,6 @@ def catat_transit(bahan, jumlah, satuan, supplier="PT. Supplier Utama", file_upl
 def edit_gambar_transit(bahan, file_upload_baru):
     df_tr = muat_transit()
     if not df_tr.empty and bahan in df_tr["Bahan Baku"].values:
-        # Ambil indeks paling akhir untuk bahan tersebut
         idx = df_tr[df_tr["Bahan Baku"] == bahan].index[-1]
         sekarang = datetime.now()
         ext = file_upload_baru.name.split(".")[-1]
@@ -377,9 +351,7 @@ def edit_gambar_transit(bahan, file_upload_baru):
         return True
     return False
 
-# ============================================================
 # ALGORITMA HADLEY-WHITIN & GENERATOR EXCEL/PDF
-# ============================================================
 def hitung_hadley_whitin_single(D, sigma, L_num, A, h, Cu, pi, max_iter=50):
     if Cu <= 0:
         Cu = 2.0 * pi if pi > 0 else (h * 5.0 if h > 0 else 1000.0)
@@ -522,9 +494,7 @@ def buat_memo_internal_pdf(df_po, nomor_po, petugas_nama, today_str):
     buffer.seek(0)
     return buffer.getvalue()
 
-# ============================================================
 # INISIALISASI SESSION STATE & SIDEBAR
-# ============================================================
 if "data_gudang" not in st.session_state:
     st.session_state["data_gudang"] = None
 if "data_raw_df" not in st.session_state:
@@ -569,16 +539,13 @@ with st.sidebar:
 
     uploaded_file = st.file_uploader("Upload File Excel", type=["xlsx", "csv"])
 
-# ============================================================
 # PEMPROSESAN DATA & OTOMASI ANALISIS ABC + HADLEY-WHITIN
-# ============================================================
 if uploaded_file is not None and st.session_state["data_gudang"] is None:
     try:
-        # Menggunakan openpyxl dengan data_only=True agar nilai rumus Excel tereksekusi menjadi angka
         wb_uploaded = openpyxl.load_workbook(uploaded_file, data_only=True)
         sheet_names = wb_uploaded.sheetnames
         
-        # 1. BACA SHEET DATA UTAMA (FLEXIBLE SHEET SELECTION)
+        # 1. BACA SHEET DATA UTAMA YANG DI EXCEL
         sheet_sp_name = None
         for s in sheet_names:
             if "siap pakai" in s.lower() or "data" in s.lower():
@@ -588,12 +555,12 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
         if sheet_sp_name:
             sheet_sp = wb_uploaded[sheet_sp_name]
         else:
-            sheet_sp = wb_uploaded.active  # Mengambil sheet pertama jika nama sheet tidak dikenali
+            sheet_sp = wb_uploaded.active
 
         data_sp = list(sheet_sp.values)
         df_raw = pd.DataFrame(data_sp[1:], columns=data_sp[0])
 
-        # 2. BACA SHEET DATA MENTAH (JIKA ADA BULANAN JAN-DES)
+        # 2. BACA SHEET DATA MENTAH 
         df_mentah = None
         sheet_mt_name = None
         for s in sheet_names:
@@ -606,10 +573,9 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
             data_mt = list(sheet_mt.values)
             df_mentah = pd.DataFrame(data_mt[1:], columns=data_mt[0])
 
-        # Bersihkan nama kolom dari spasi berlebih
         df_raw.columns = [str(col).strip() if col is not None else "" for col in df_raw.columns]
 
-        # 3. DETEKSI NAMA KOLOM SECARA OTOMATIS (CASE-INSENSITIVE)
+        # 3. DETEKSI NAMA KOLOM SECARA OTOMATIS 
         cols_map = {str(col).lower(): col for col in df_raw.columns}
 
         def cari_kolom(pilihan_kolom):
@@ -636,7 +602,7 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
         df["Bahan_Nama"] = df[col_nama].astype(str).str.strip()
         df["D_num"] = df[col_D].apply(bersihkan_angka)
 
-        # Hitung Sigma di Python (Berdasarkan data bulanan dari Sheet 2 jika ada)
+        # Hitung Sigma di Python 
         def hitung_sigma_python(row_sp):
             nama_bhn = str(row_sp["Bahan_Nama"]).strip()
             if df_mentah is not None and not df_mentah.empty:
@@ -649,7 +615,6 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
                 
                 match = df_mentah[df_mentah[col_bhn_m].astype(str).str.strip() == nama_bhn]
                 if not match.empty:
-                    # Ambil 12 kolom bulanan setelah nama barang
                     vals = match.iloc[0, 2:14].values
                     vals_clean = [bersihkan_angka(v) for v in vals if pd.notna(v)]
                     if len(vals_clean) > 1:
@@ -758,9 +723,7 @@ if uploaded_file is not None and st.session_state["data_gudang"] is None:
     except Exception as e:
         st.error(f"Gagal memproses data template Excel: {e}")
         
-# ============================================================
-# TAMPILAN DASHBOARD & AKSI FITUR UTAMA
-# ============================================================
+# TAMPILAN DASHBOARD & FITUR UTAMA
 if st.session_state["data_gudang"] is not None:
     df_hasil = st.session_state["data_gudang"].copy()
     df_hasil["Stok Saat Ini"] = df_hasil["Bahan Baku"].map(st.session_state["stok_realtime"])
@@ -868,9 +831,7 @@ if st.session_state["data_gudang"] is not None:
 
     st.markdown("---")
 
-    # ============================================================
-    # TAB UTAMA DASHBOARD (STREAMLIT OPTION MENU)
-    # ============================================================
+    # TAB MODUL UTAMA DASHBOARD 
     st.markdown(
         """
         <h2 style="text-align: center; font-weight: 700; color: #F8FAFC; margin-bottom: 20px; letter-spacing: 1px;">
@@ -913,9 +874,9 @@ if st.session_state["data_gudang"] is not None:
     # PROTEKSI HAK AKSES ROLE
     if selected not in allowed_menus:
         st.error(f"⛔ **Akses Ditolak!** Akun **{st.session_state['role'].upper()}** tidak diizinkan membuka modul **{selected}**.")
-        st.info(f"💡 Modul yang boleh kamu buka: **{', '.join(allowed_menus)}**")
+        st.info(f"Modul yang boleh kamu buka: **{', '.join(allowed_menus)}**")
     else:
-        # ------------------ MODUL 1 ------------------
+        # MODUL 1 
         if selected == "Live Monitoring & Chart":
             st.markdown("### 📥 📤 Panel Transaksi Gudang")
 
@@ -972,7 +933,7 @@ if st.session_state["data_gudang"] is not None:
             fig.update_layout(height=500)
             st.plotly_chart(fig, use_container_width=True)
 
-        # ------------------ MODUL 2 ------------------
+        # MODUL 2
         elif selected == "Analisis Sensitivitas":
             max_iter = 50
             st.markdown(
@@ -1119,11 +1080,11 @@ if st.session_state["data_gudang"] is not None:
             )
 
             st.plotly_chart(fig_sens, use_container_width=True)
-            st.markdown("#### 📋 Tabel Rincian Hasil Analisis Sensitivitas")
+            st.markdown("#### Tabel Rincian Hasil Analisis Sensitivitas")
             kolom_tabel_tampil = ["Perubahan (%)", "Nilai Parameter", "Q* (Pemesanan)", "Δ Q* (%)", "s* (ROP)", "Δ s* (%)", "Safety Stock (SS)", "Total Cost / OT (Rp)", "Δ Total Cost (%)"]
             st.dataframe(df_sens_table[kolom_tabel_tampil], use_container_width=True)
 
-        # ------------------ MODUL 3 ------------------
+        # MODUL 3 
         elif selected == "Draft Surat PO":
             st.markdown("<h2 style='font-size: 28px; font-weight: bold;'>📜 Generator Dokumen Purchase Order (PO)</h2>", unsafe_allow_html=True)
 
@@ -1318,7 +1279,7 @@ if st.session_state["data_gudang"] is not None:
                 else:
                     st.success("✅ Tidak ada bahan baku yang berada di bawah Reorder Point (ROP). Belum ada draft PO yang perlu diterbitkan.")
 
-        # ------------------ MODUL 4 ------------------
+        # MODUL 4 
         elif selected == "Riwayat Keluar-Masuk":
             st.markdown("#### 📜 Riwayat Transaksi Mutasi Stok Gudang")
             df_riwayat = muat_riwayat()
@@ -1331,7 +1292,7 @@ if st.session_state["data_gudang"] is not None:
                     df_riwayat_display.to_excel(writer, index=False, sheet_name='Riwayat Mutasi')
 
                 st.download_button(
-                    label="📥 Download Laporan Riwayat (Excel)",
+                    label="Download Laporan Riwayat (Excel)",
                     data=buffer_rw.getvalue(),
                     file_name="Laporan_Riwayat_Mutasi_Stok.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1341,7 +1302,7 @@ if st.session_state["data_gudang"] is not None:
 
             st.markdown("---")
 
-            st.markdown("#### 🚚 Status Pesanan Dalam Proses Pengantaran (Supplier)")
+            st.markdown("#### Status Pesanan Dalam Proses Pengantaran (Supplier)")
             df_transit = muat_transit()
 
             if not df_transit.empty:
@@ -1364,7 +1325,7 @@ if st.session_state["data_gudang"] is not None:
             else:
                 st.info("Tidak ada pesanan bahan baku yang sedang dalam pengantaran saat ini.")
 
-        # ------------------ MODUL 5 ------------------
+        # MODUL 5 
         elif selected == "Pengaturan & Reset Data":
             st.markdown("#### ⚙️ Pengaturan & Reset Master Data")
             st.warning("⚠️ Tindakan di bawah ini akan menghapus data yang diunggah dan mengatur ulang transaksi gudang ke kondisi awal.")
@@ -1394,9 +1355,7 @@ if st.session_state["data_gudang"] is not None:
                     else:
                         st.error("❌ Kata sandi salah! Gunakan sandi otorisasi 'adm 1' atau 'adm 2'.")
 
-# ============================================================
-# HALAMAN DEFAULT LANDING (JIKA BELUM UPLOAD DATA)
-# ============================================================
+# HALAMAN INFORMASI (JIKA BELUM UPLOAD DATA)
 else:
     st.markdown(
         """
