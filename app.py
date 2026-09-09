@@ -1,6 +1,5 @@
 """
 Integrated Inventory Control & Real-Time Monitoring System
-Continuous Review Hadley-Whitin & ABC Analysis Implementation
 """
 
 import io
